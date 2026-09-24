@@ -1,0 +1,25 @@
+import { SignOutButton } from "@/components/SignOutButton";
+import { requireRole } from "@/lib/auth";
+
+export const metadata = { title: "More" };
+
+export default async function MorePage() {
+  const { profile, location } = await requireRole("worker");
+
+  return (
+    <div className="flex flex-col gap-4">
+      <section className="card p-5">
+        <p className="text-sm text-muted">Signed in as</p>
+        <p className="text-lg font-bold">{profile.full_name}</p>
+        <p className="text-sm text-muted">
+          @{profile.username} · {location?.name}
+        </p>
+      </section>
+      <section className="card divide-y divide-line">
+        <p className="p-4 text-muted">Stock requests — Phase 3</p>
+        <p className="p-4 text-muted">Recent activity — Phase 2</p>
+      </section>
+      <SignOutButton className="btn btn-secondary w-full" />
+    </div>
+  );
+}

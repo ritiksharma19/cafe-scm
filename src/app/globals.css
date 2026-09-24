@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+/*
+ * One light, high-contrast theme: workers use phones outdoors at food carts.
+ * Status colours are always paired with a text label, never colour alone.
+ */
+:root {
+  --bg: #f4f5f7;
+  --surface: #ffffff;
+  --ink: #111418;
+  --muted: #5b6470;
+  --line: #d9dde3;
+  --brand: #0f5132;
+  --brand-ink: #ffffff;
+  --ok: #157347;
+  --warn: #9a6700;
+  --danger: #b42318;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+@utility card {
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+
+@utility btn {
+  display: inline-flex;
+  min-height: 3rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-xl);
+  padding-inline: 1.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+@utility btn-primary {
+  background: var(--brand);
+  color: var(--brand-ink);
+  &:hover:not(:disabled) {
+    filter: brightness(1.15);
+  }
+}
+
+@utility btn-secondary {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  &:hover:not(:disabled) {
+    background: var(--bg);
+  }
+}
+
+@utility field {
+  display: block;
+  width: 100%;
+  min-height: 3rem;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  padding-inline: 1rem;
+  font-size: 1rem;
+  color: var(--ink);
+  outline: none;
+  &:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 30%, transparent);
+  }
+}
