@@ -65,8 +65,8 @@ describe("reference data", () => {
   });
 });
 
-describe("profiles from auth users", () => {
-  it("creates profiles with role and cart from app_metadata", async () => {
+describe("profiles", () => {
+  it("stores role and cart per person", async () => {
     const r = await db.query<{ username: string; role: string; location_id: string | null }>(
       "select username, role, location_id from public.profiles order by username",
     );
@@ -77,13 +77,38 @@ describe("profiles from auth users", () => {
     ]);
   });
 
-  it("rejects a worker without a cart (blocks stray sign-ups)", async () => {
+  it("a worker profile must have a cart", async () => {
     await rejects(
-      asOwner(db, (tx) =>
-        tx.query(`insert into auth.users (email, raw_app_meta_data) values ('stray@test.local', '{}')`),
-      ),
+      asOwner(db, async (tx) => {
+        const u = await tx.query<{ id: string }>("insert into auth.users (email) values ($1) returning id", ["nocart@test.local"]);
+        await tx.query("insert into public.profiles (id, username, full_name, role) values ($1, $2, $3, $4)", [
+          u.rows[0].id,
+          "nocart",
+          "No Cart",
+          "worker",
+        ]);
+      }),
       /profiles_worker_has_location/,
     );
+  });
+
+  it("a login without a profile (e.g. a stray sign-up) can see and do nothing", async () => {
+    await asOwner(db, async (tx) => {
+      // Supabase Auth inserts the login row with only provider metadata.
+      const u = await tx.query<{ id: string }>("insert into auth.users (email, raw_app_meta_data) values ($1, $2) returning id", [
+        "stray@test.local",
+        JSON.stringify({ provider: "email", providers: ["email"] }),
+      ]);
+      expect((await tx.query("select 1 from public.profiles where id = $1", [u.rows[0].id])).rows).toEqual([]);
+
+      await tx.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: u.rows[0].id })]);
+      await tx.exec("set local role authenticated");
+      expect((await tx.query("select * from public.locations")).rows).toEqual([]);
+      expect((await tx.query("select * from public.products")).rows).toEqual([]);
+      await tx.exec("savepoint s");
+      await expect(tx.query("select public.record_sale(gen_random_uuid(), '[{}]'::jsonb)")).rejects.toThrow(/Not signed in or account disabled/);
+      await tx.exec("rollback to savepoint s");
+    });
   });
 
   it("worker sees only their own profile; admin sees all", async () => {

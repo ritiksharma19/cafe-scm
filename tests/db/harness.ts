@@ -63,20 +63,31 @@ export async function locationId(db: Db, code: string): Promise<string> {
   return r.rows[0].id;
 }
 
-/** Creates an auth user the way the admin API does (role/cart in app_metadata). */
+/**
+ * Creates a user the way production does: Supabase Auth inserts the auth.users row
+ * (custom app_metadata is NOT present at insert time), then the server inserts the
+ * profile with the service role.
+ */
 export async function createUser(
   db: Db,
   opts: { username: string; role: "admin" | "worker"; locationCode?: string; fullName?: string },
 ): Promise<string> {
   const id = randomUUID();
-  const meta: Record<string, string> = { username: opts.username, role: opts.role };
-  if (opts.fullName) meta.full_name = opts.fullName;
-  if (opts.locationCode) meta.location_id = await locationId(db, opts.locationCode);
   await db.query("insert into auth.users (id, email, raw_app_meta_data) values ($1, $2, $3)", [
     id,
     `${opts.username}@test.local`,
-    JSON.stringify(meta),
+    JSON.stringify({ provider: "email", providers: ["email"] }),
   ]);
+  await db.query(
+    "insert into public.profiles (id, username, full_name, role, location_id) values ($1, $2, $3, $4, $5)",
+    [
+      id,
+      opts.username,
+      opts.fullName ?? opts.username,
+      opts.role,
+      opts.locationCode ? await locationId(db, opts.locationCode) : null,
+    ],
+  );
   return id;
 }
 

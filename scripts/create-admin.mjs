@@ -56,6 +56,13 @@ if (password.length < 8) {
 }
 
 const supabase = createClient(url, secret, { auth: { autoRefreshToken: false, persistSession: false } });
+
+const { data: taken } = await supabase.from("profiles").select("id").ilike("username", username).maybeSingle();
+if (taken) {
+  console.error(`The username "${username}" is already in use. Nothing was created.`);
+  exit(1);
+}
+
 const { data, error } = await supabase.auth.admin.createUser({
   email,
   password,
@@ -64,6 +71,16 @@ const { data, error } = await supabase.auth.admin.createUser({
 });
 if (error) {
   console.error(`Failed: ${error.message}`);
+  exit(1);
+}
+
+// The profile carries the role; without it the account has no access at all.
+const { error: profileError } = await supabase
+  .from("profiles")
+  .insert({ id: data.user.id, username, full_name: fullName, role: "admin" });
+if (profileError) {
+  await supabase.auth.admin.deleteUser(data.user.id); // no half-created accounts
+  console.error(`Failed to create the profile: ${profileError.message}. Nothing was kept.`);
   exit(1);
 }
 console.log(`Admin created (id ${data.user.id}). Sign in with "${isEmail ? email : username}".`);

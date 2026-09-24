@@ -50,6 +50,9 @@ export async function createWorker(_prev: ActionResult, formData: FormData): Pro
   if (!cart) return { error: "Choose an active cart." };
 
   const service = createAdminClient();
+  const { data: existing } = await service.from("profiles").select("id").ilike("username", username).maybeSingle();
+  if (existing) return { error: `Username "${username}" is already taken.` };
+
   const { data, error } = await service.auth.admin.createUser({
     email: loginEmail(username, emailDomain()),
     password: pin,
@@ -59,6 +62,17 @@ export async function createWorker(_prev: ActionResult, formData: FormData): Pro
   if (error) {
     const taken = /already|exists|registered/i.test(error.message);
     return { error: taken ? `Username "${username}" is already taken.` : `Could not create user: ${error.message}` };
+  }
+
+  // The profile carries role and cart; without it the login has no access at all.
+  const { error: profileError } = await service
+    .from("profiles")
+    .insert({ id: data.user.id, username, full_name: fullName, role: "worker", location_id: locationId });
+  if (profileError) {
+    await service.auth.admin.deleteUser(data.user.id); // never leave a half-created account
+    return {
+      error: profileError.code === "23505" ? `Username "${username}" is already taken.` : `Could not create user: ${profileError.message}`,
+    };
   }
 
   await service.rpc("log_admin_action", {

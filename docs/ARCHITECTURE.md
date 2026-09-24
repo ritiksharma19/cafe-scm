@@ -106,7 +106,7 @@ All PKs `uuid` (default `gen_random_uuid()`), all tables have `created_at timest
 ### Identity & locations
 | Table | Key columns |
 |---|---|
-| `profiles` | `id` (= `auth.users.id`), `full_name`, `username`, `role` (`admin`/`worker`), `location_id` (nullable for admin; required for worker), `is_active` |
+| `profiles` | `id` (= `auth.users.id`), `full_name`, `username`, `role` (`admin`/`worker`), `location_id` (nullable for admin; required for worker), `is_active`. Inserted by the server (service role) right after the Supabase Auth user is created; a login without a profile has no access. |
 | `locations` | `id`, `code` (`CENTRAL`, `CART1`…), `name`, `type` (`central`/`cart`), `is_active` |
 | `app_settings` | singleton row: `timezone` (`Asia/Kolkata`), `currency` (`INR`), `runway_window_days` (7), `min_history_days` (3), `allow_negative_on_sale`, `allow_negative_other` |
 
