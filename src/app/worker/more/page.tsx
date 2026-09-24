@@ -17,10 +17,16 @@ export default async function MorePage() {
         </p>
       </section>
       <section className="card divide-y divide-line">
-        <Link href="/worker/activity" className="flex min-h-14 items-center justify-between p-4 font-semibold">
-          Today&apos;s orders <span aria-hidden>›</span>
-        </Link>
-        <p className="p-4 text-muted">Stock requests — Phase 3</p>
+        {[
+          ["/worker/activity", "Today's activity"],
+          ["/worker/requests", "Request stock"],
+          ["/worker/send", "Send stock to another location"],
+          ["/worker/stock/count", "Count stock"],
+        ].map(([href, label]) => (
+          <Link key={href} href={href} className="flex min-h-14 items-center justify-between p-4 font-semibold">
+            {label} <span aria-hidden>›</span>
+          </Link>
+        ))}
       </section>
       <SignOutButton className="btn btn-secondary w-full" />
     </div>

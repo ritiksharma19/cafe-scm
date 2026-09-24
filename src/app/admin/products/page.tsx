@@ -121,8 +121,7 @@ export default async function ProductsPage() {
         })}
       </div>
       <p className="text-xs text-muted">
-        Costs use each material&apos;s weighted-average purchase cost. They fill in automatically once purchases are
-        recorded (Phase 3).
+        Costs use each material&apos;s weighted-average purchase cost. They update automatically whenever a purchase is recorded with a price.
       </p>
     </div>
   );
