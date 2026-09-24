@@ -10,7 +10,7 @@ export function LoginForm() {
     <form action={action} className="card flex flex-col gap-4 p-5">
       <div>
         <label htmlFor="username" className="mb-1.5 block text-sm font-medium">
-          Username
+          Username <span className="font-normal text-muted">(or email)</span>
         </label>
         <input
           id="username"

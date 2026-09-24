@@ -2,7 +2,10 @@
 /**
  * Creates the owner/admin account (one-time bootstrap).
  *
- *   node --env-file=.env.local scripts/create-admin.mjs <username> "<Full Name>"
+ *   node --env-file=.env.local scripts/create-admin.mjs <username-or-email> "<Full Name>"
+ *
+ * With a real email (recommended for the owner) you sign in with that email and can use
+ * Supabase password reset. With a plain username, a synthetic address is used instead.
  *
  * Prompts for the password (min 8 characters). Uses SUPABASE_SECRET_KEY, so run it only on a trusted machine.
  */
@@ -16,7 +19,7 @@ const secret = process.env.SUPABASE_SECRET_KEY;
 const domain = process.env.LOGIN_EMAIL_DOMAIN;
 
 if (!rawUsername || !fullName) {
-  console.error('Usage: node --env-file=.env.local scripts/create-admin.mjs <username> "<Full Name>"');
+  console.error('Usage: node --env-file=.env.local scripts/create-admin.mjs <username-or-email> "<Full Name>"');
   exit(1);
 }
 if (!url || !secret || !domain) {
@@ -24,7 +27,15 @@ if (!url || !secret || !domain) {
   exit(1);
 }
 
-const username = rawUsername.trim().toLowerCase();
+const login = rawUsername.trim().toLowerCase();
+const isEmail = login.includes("@");
+if (isEmail && !/^[^@s]+@[^@s]+.[^@s]+$/.test(login)) {
+  console.error("That does not look like an email address.");
+  exit(1);
+}
+// The app username (shown in Users) is the part before "@" for an email login.
+const username = (isEmail ? login.split("@")[0] : login).replace(/[^a-z0-9._-]/g, "").slice(0, 32);
+const email = isEmail ? login : `${username}@${domain}`;
 if (!/^[a-z0-9][a-z0-9._-]{1,31}$/.test(username)) {
   console.error("Username: 2–32 characters, lower-case letters, digits, dot, dash or underscore.");
   exit(1);
@@ -40,7 +51,7 @@ if (password.length < 8) {
 
 const supabase = createClient(url, secret, { auth: { autoRefreshToken: false, persistSession: false } });
 const { data, error } = await supabase.auth.admin.createUser({
-  email: `${username}@${domain}`,
+  email,
   password,
   email_confirm: true,
   app_metadata: { username, full_name: fullName, role: "admin" },
@@ -49,4 +60,4 @@ if (error) {
   console.error(`Failed: ${error.message}`);
   exit(1);
 }
-console.log(`Admin "${username}" created (id ${data.user.id}). Sign in with username "${username}".`);
+console.log(`Admin created (id ${data.user.id}). Sign in with "${isEmail ? email : username}".`);

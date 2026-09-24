@@ -5,7 +5,7 @@
  *   - sample selling prices and ingredient costs
  *   - opening stock at Central Storage and each cart (only where none exists yet)
  *
- *   npm run seed:sample -- <admin-username>
+ *   npm run seed:sample -- <admin-username-or-email>
  *
  * Signs in AS the admin (publishable key), so every change goes through the same
  * permission checks and audit trail as the app. Safe to run more than once.
@@ -22,7 +22,7 @@ const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const domain = process.env.LOGIN_EMAIL_DOMAIN;
 if (!rawUsername || !url || !key || !domain) {
-  console.error("Usage: npm run seed:sample -- <admin-username>   (needs .env.local, see .env.example)");
+  console.error("Usage: npm run seed:sample -- <admin-username-or-email>   (needs .env.local, see .env.example)");
   exit(1);
 }
 
@@ -56,7 +56,8 @@ const password = process.env.ADMIN_PASSWORD ?? (await rl.question(`Password for 
 rl.close();
 
 const supabase = createClient(url, key, { auth: { persistSession: false } });
-const { error: signInError } = await supabase.auth.signInWithPassword({ email: `${username}@${domain}`, password });
+const email = username.includes("@") ? username : `${username}@${domain}`;
+const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 if (signInError) fail("Sign-in", signInError);
 
 // 2. Import the recipe sheet.
