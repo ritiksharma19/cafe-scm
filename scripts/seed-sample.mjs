@@ -11,8 +11,8 @@
  * permission checks and audit trail as the app. Safe to run more than once.
  */
 import { createClient } from "@supabase/supabase-js";
-import { createInterface } from "node:readline/promises";
-import { stdin, stdout, exit } from "node:process";
+import { promptHidden } from "./prompt-hidden.mjs";
+import { exit } from "node:process";
 import * as fs from "node:fs";
 import * as XLSX from "xlsx";
 import { parseRecipeSheet } from "../src/lib/recipe-sheet.ts";
@@ -51,9 +51,7 @@ function fail(step, error) {
 
 // 1. Sign in as the admin.
 const username = rawUsername.trim().toLowerCase();
-const rl = createInterface({ input: stdin, output: stdout });
-const password = process.env.ADMIN_PASSWORD ?? (await rl.question(`Password for ${username}: `));
-rl.close();
+const password = process.env.ADMIN_PASSWORD ?? (await promptHidden(`Password for ${username} (hidden): `));
 
 const supabase = createClient(url, key, { auth: { persistSession: false } });
 const email = username.includes("@") ? username : `${username}@${domain}`;

@@ -10,8 +10,8 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
-import { createInterface } from "node:readline/promises";
-import { stdin, stdout, exit } from "node:process";
+import { promptHidden } from "./prompt-hidden.mjs";
+import { exit } from "node:process";
 
 const [, , rawUsername] = process.argv;
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -22,9 +22,7 @@ if (!rawUsername || !url || !key || !domain) {
   exit(1);
 }
 
-const rl = createInterface({ input: stdin, output: stdout });
-const pin = process.env.WORKER_PIN ?? (await rl.question(`PIN for ${rawUsername}: `));
-rl.close();
+const pin = process.env.WORKER_PIN ?? (await promptHidden(`PIN for ${rawUsername} (hidden): `));
 
 const supabase = createClient(url, key, { auth: { persistSession: false } });
 const { data: auth, error: signInError } = await supabase.auth.signInWithPassword({

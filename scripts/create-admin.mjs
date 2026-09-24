@@ -10,8 +10,8 @@
  * Prompts for the password (min 8 characters). Uses SUPABASE_SECRET_KEY, so run it only on a trusted machine.
  */
 import { createClient } from "@supabase/supabase-js";
-import { createInterface } from "node:readline/promises";
-import { stdin, stdout, exit } from "node:process";
+import { promptHidden } from "./prompt-hidden.mjs";
+import { exit } from "node:process";
 
 const [, , rawUsername, fullName] = process.argv;
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -41,9 +41,15 @@ if (!/^[a-z0-9][a-z0-9._-]{1,31}$/.test(username)) {
   exit(1);
 }
 
-const rl = createInterface({ input: stdin, output: stdout });
-const password = process.env.ADMIN_PASSWORD ?? (await rl.question("Password (min 8 characters): "));
-rl.close();
+let password = process.env.ADMIN_PASSWORD;
+if (!password) {
+  password = await promptHidden("Choose a password (min 8 characters, hidden): ");
+  const again = await promptHidden("Type it again: ");
+  if (again !== password) {
+    console.error("The two passwords do not match. Nothing was created.");
+    exit(1);
+  }
+}
 if (password.length < 8) {
   console.error("Password must be at least 8 characters.");
   exit(1);
