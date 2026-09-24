@@ -21,8 +21,7 @@ export default async function AdminDashboard() {
   const setup = [
     { done: carts.every((c) => workersAt(c.id).length > 0), label: "Every cart has a worker", href: "/admin/users" },
     { done: (materialCount ?? 0) > 0, label: "Raw materials imported", href: null },
-    { done: (productCount ?? 0) > 0, label: "Products and recipes imported", href: null },
-  ];
+    { done: (productCount ?? 0) > 0, label: "Products and recipes imported", href: null },  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -47,7 +46,7 @@ export default async function AdminDashboard() {
               ) : (
                 <span className="font-medium">{s.label}</span>
               )}
-              {!s.href && !s.done && <span className="text-sm text-muted">(Excel import — Phase 5; sample data in Phase 2)</span>}
+              {!s.href && !s.done && <span className="text-sm text-muted">(sample data: <code>npm run seed:sample</code> · Excel import screen: Phase 5)</span>}
             </li>
           ))}
         </ul>

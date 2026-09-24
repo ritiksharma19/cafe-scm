@@ -103,6 +103,17 @@ export async function as<T>(db: Db, userId: string | null, fn: (tx: Tx) => Promi
   return result!;
 }
 
+/** Like `as`, but COMMITS — for fixture setup that later tests build on. */
+export async function asCommitted<T>(db: Db, userId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await tx.query("select set_config('request.jwt.claims', $1, true)", [
+      JSON.stringify({ sub: userId, role: "authenticated" }),
+    ]);
+    await tx.exec("set local role authenticated");
+    return fn(tx);
+  });
+}
+
 /** Like `as`, but the transaction runs as the database owner (bypasses RLS) and is rolled back. */
 export async function asOwner<T>(db: Db, fn: (tx: Tx) => Promise<T>): Promise<T> {
   let result: T;

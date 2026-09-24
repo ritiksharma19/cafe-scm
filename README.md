@@ -11,8 +11,8 @@ Workers record events (sales, receipts, wastage); the database calculates invent
 | Phase | Scope | State |
 |---|---|---|
 | 1 | Foundation: schema, RLS, auth (username + PIN), roles, PWA shell, user admin | ✅ |
-| 2 | Worker sales + atomic recipe-based deduction | next |
-| 3 | Receiving, wastage, transfers, requests, stock counts | |
+| 2 | Worker sales + atomic recipe-based deduction, recipe versioning, void, orders/products admin | ✅ |
+| 3 | Receiving, wastage, transfers, requests, stock counts | next |
 | 4 | Admin dashboard, alerts, runway, analytics, realtime | |
 | 5 | Excel import/export | |
 | 6 | Offline outbox + idempotent sync | |
@@ -50,6 +50,16 @@ npm run create-admin -- owner "Owner Name"
 ```
 
 Then `npm run dev`, open <http://localhost:3000>, sign in as `owner`, and add one worker per cart under **Users**.
+
+### 5. Load the sample menu (optional, for trying it out)
+
+```bash
+npm run seed:sample -- owner          # Burger, Roll, Fries, Shake, Mojito + prices, costs, opening stock
+npm run check:concurrency -- <worker> # live check: 20 parallel sales incl. 5 retries → exactly 15 recorded
+```
+
+Sign in as a worker on a phone, sell a few items, then compare **Stock** before/after and open
+**Admin → Orders** to see each order's ingredient deductions.
 
 ## Deploy (Vercel)
 

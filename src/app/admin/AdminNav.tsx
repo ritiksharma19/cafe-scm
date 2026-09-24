@@ -6,6 +6,8 @@ import { usePathname } from "next/navigation";
 // Sections are added here as each phase ships.
 const LINKS = [
   { href: "/admin", label: "Dashboard" },
+  { href: "/admin/orders", label: "Orders" },
+  { href: "/admin/products", label: "Products" },
   { href: "/admin/users", label: "Users" },
 ] as const;
 

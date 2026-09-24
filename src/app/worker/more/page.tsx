@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SignOutButton } from "@/components/SignOutButton";
 import { requireRole } from "@/lib/auth";
 
@@ -16,8 +17,10 @@ export default async function MorePage() {
         </p>
       </section>
       <section className="card divide-y divide-line">
+        <Link href="/worker/activity" className="flex min-h-14 items-center justify-between p-4 font-semibold">
+          Today&apos;s orders <span aria-hidden>›</span>
+        </Link>
         <p className="p-4 text-muted">Stock requests — Phase 3</p>
-        <p className="p-4 text-muted">Recent activity — Phase 2</p>
       </section>
       <SignOutButton className="btn btn-secondary w-full" />
     </div>
