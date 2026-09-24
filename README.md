@@ -15,7 +15,7 @@ Workers record events (sales, receipts, wastage); the database calculates invent
 | 3 | Receiving (weighted-average cost), wastage, transfers, requests, blind stock counts + approval, suppliers | ✅ |
 | 4 | Dashboard ("needs attention", KPIs, alerts, carts), inventory matrix + history, runway, analytics, live updates, materials/recipes/settings admin | ✅ |
 | 5 | Excel import (preview, row-level validation, all-or-nothing, prices) and CSV/Excel exports of 7 reports | ✅ |
-| 6 | Offline outbox + idempotent sync | next |
+| 6 | Offline: sales, receipts and wastage saved on the phone first, synced with idempotent ids; worker screens open without signal; pending/failed status and sync screen | ✅ |
 
 ## One-time setup
 
@@ -60,6 +60,31 @@ npm run check:concurrency -- <worker> # live check: 20 parallel sales incl. 5 re
 
 Sign in as a worker on a phone, sell a few items, then compare **Stock** before/after and open
 **Admin → Orders** to see each order's ingredient deductions.
+
+## Go-live checklist
+
+1. Supabase project created, auth settings as above, `npm run db:push` applied.
+2. Owner account created; one worker per cart under **Users** (6-digit PINs).
+3. Real menu imported under **Admin → Import from Excel**; prices checked under **Products**.
+4. Raw materials: reorder levels, lead times and default suppliers set; opening stock entered
+   (a stock count per location, or **Inventory → material → Adjust stock**).
+5. Deployed to Vercel; each worker opens the URL on their phone, signs in, taps **Add to Home Screen**,
+   and opens every tab once while online (so the screens are saved for offline use).
+6. Try offline once: airplane mode → sell an item (amber “Saved on this phone”) → back online → the
+   pill returns to ONLINE and the order appears under **Admin → Orders** exactly once.
+7. Optional before real sales: `npm run check:concurrency -- <worker>` on the sample data, then void the test orders.
+
+## Offline behaviour
+
+- Sales, stock receipts and wastage are saved on the phone **before** anything is sent, then synced
+  automatically (on reconnect, when the app is opened, and every 30 s while items wait).
+- Each document keeps its id across retries and the server ignores repeats, so nothing is ever counted twice.
+- The header pill shows `ONLINE`, `OFFLINE — N PENDING SYNC`, `SYNCING N…` or `⚠ N FAILED`; tap it to see
+  the items. A document the server refuses (e.g. a product was removed) is kept as FAILED for the worker to
+  retry or remove — never dropped silently.
+- Requests, transfers, stock counts and all admin screens need a connection.
+- Sync within 3 days: older documents are recorded with the time they sync (the server rejects back-dating
+  beyond 72 hours).
 
 ## Deploy (Vercel)
 

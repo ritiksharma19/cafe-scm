@@ -5,7 +5,7 @@ import { useState } from "react";
 import type { Catalog } from "@/lib/catalog";
 import { formatINR } from "@/lib/format";
 import { parseQty, toBase, unitChoices, type Material, type UnitChoice } from "@/lib/units";
-import { useRpcSubmit } from "@/lib/useRpcSubmit";
+import { useDocSubmit } from "@/lib/offline/useDocSubmit";
 import { WASTAGE_REASONS } from "@/lib/wastage";
 import { MaterialPicker } from "./MaterialPicker";
 import { QuantityField } from "./QuantityField";
@@ -13,14 +13,15 @@ import { SubmitStatus, SuccessBanner } from "./SubmitStatus";
 
 export function WastageForm({ catalog }: { catalog: Catalog }) {
   const router = useRouter();
-  const rpc = useRpcSubmit<{ status: string; cost: number }>("record_wastage", "p_wastage_id");
+  // Worker screen: saved on the phone first, works without signal.
+  const rpc = useDocSubmit<{ status: string; cost: number }>("wastage", "record_wastage", "p_wastage_id", { offline: true });
   const [material, setMaterial] = useState<Material | null>(null);
   const [qty, setQty] = useState("");
   const [unit, setUnit] = useState<UnitChoice | null>(null);
   const [reason, setReason] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
-  const [done, setDone] = useState<string | null>(null);
+  const [done, setDone] = useState<{ text: string; queued: boolean } | null>(null);
 
   const choices = material ? unitChoices(material, catalog.units, catalog.conversions) : [];
 
@@ -41,10 +42,15 @@ export function WastageForm({ catalog }: { catalog: Catalog }) {
         p_entered_qty: entered,
         p_entered_unit: unit.code,
       },
-      { withOccurredAt: true },
+      `Wasted ${material.name} ${entered} ${unit.code} (${reason.replace("_", " ")})`,
     );
     if (!result) return;
-    setDone(`Wastage recorded · ${material.name} ${entered} ${unit.code}${result.cost > 0 ? ` · ${formatINR(result.cost)}` : ""}`);
+    const what = `${material.name} ${entered} ${unit.code}`;
+    setDone(
+      result.queued
+        ? { text: `Saved on this phone · ${what} — will sync when online`, queued: true }
+        : { text: `Wastage recorded · ${what}${result.data.cost > 0 ? ` · ${formatINR(result.data.cost)}` : ""}`, queued: false },
+    );
     setMaterial(null);
     setQty("");
     setUnit(null);
@@ -55,7 +61,7 @@ export function WastageForm({ catalog }: { catalog: Catalog }) {
 
   return (
     <div className="flex flex-col gap-4">
-      {done && <SuccessBanner text={done} onDone={() => setDone(null)} />}
+      {done && <SuccessBanner text={done.text} queued={done.queued} onDone={() => setDone(null)} />}
       <div className="card flex flex-col gap-4 p-4">
         <MaterialPicker
           materials={catalog.materials}

@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { formatINR } from "@/lib/format";
-import { newId } from "@/lib/ids";
-import { isDefinitiveFailure, type SaleResult } from "@/lib/sale";
-import { createClient } from "@/lib/supabase/client";
+import { useOutboxSubmit } from "@/lib/offline/useOutboxSubmit";
+import type { SaleResult } from "@/lib/sale";
 
 export interface SellProduct {
   id: string;
@@ -14,15 +13,9 @@ export interface SellProduct {
   sort_order: number;
 }
 
-type Phase =
-  | { kind: "idle" }
-  | { kind: "sending" }
-  // Server never answered: the order may or may not be saved. Keep it locked and retry with the same id.
-  | { kind: "unconfirmed"; message: string }
-  | { kind: "error"; message: string };
-
 interface Toast {
   text: string;
+  tone: "ok" | "queued";
   warning?: string;
 }
 
@@ -36,11 +29,9 @@ export function SellScreen({
   todaySales: number;
 }) {
   const [cart, setCart] = useState<Record<string, number>>({});
-  const [phase, setPhase] = useState<Phase>({ kind: "idle" });
   const [toast, setToast] = useState<Toast | null>(null);
   const [today, setToday] = useState({ orders: todayOrders, sales: todaySales });
-  const orderId = useRef<string | null>(null);
-  const occurredAt = useRef<string | null>(null);
+  const { phase, submit: send, clearError, busy } = useOutboxSubmit("sale", "record_sale", "p_order_id");
 
   useEffect(() => {
     if (!toast) return;
@@ -48,14 +39,14 @@ export function SellScreen({
     return () => clearTimeout(t);
   }, [toast]);
 
-  const locked = phase.kind === "sending" || phase.kind === "unconfirmed";
+  const locked = busy;
   const lines = products.filter((p) => cart[p.id] > 0);
   const itemCount = lines.reduce((n, p) => n + cart[p.id], 0);
   const total = lines.reduce((sum, p) => sum + Number(p.selling_price) * cart[p.id], 0);
 
   function change(productId: string, delta: number) {
     if (locked) return;
-    if (phase.kind === "error") setPhase({ kind: "idle" });
+    if (phase.kind === "error") clearError();
     setCart((c) => {
       const next = Math.max(0, Math.min(999, (c[productId] ?? 0) + delta));
       return { ...c, [productId]: next };
@@ -65,52 +56,33 @@ export function SellScreen({
 
   function reset() {
     setCart({});
-    orderId.current = null;
-    occurredAt.current = null;
-    setPhase({ kind: "idle" });
+    clearError();
   }
 
   async function submit() {
-    if (itemCount === 0 || phase.kind === "sending") return;
-    // Same id on every retry of this order → the server can never record it twice.
-    orderId.current ??= newId();
-    occurredAt.current ??= new Date().toISOString();
-    setPhase({ kind: "sending" });
+    if (itemCount === 0 || busy) return;
+    const summary = `${lines.map((p) => `${p.name} × ${cart[p.id]}`).join(", ")} · ${formatINR(total)}`;
+    // Saved on the phone first; sent now if online, otherwise synced later with the same id.
+    const r = await send({ p_items: lines.map((p) => ({ product_id: p.id, quantity: cart[p.id] })) }, summary);
+    if (!r) return; // rejected: the error is shown and the order stays on screen to fix
 
-    const supabase = createClient();
-    const { data, error } = await supabase.rpc("record_sale", {
-      p_order_id: orderId.current,
-      p_items: lines.map((p) => ({ product_id: p.id, quantity: cart[p.id] })),
-      p_occurred_at: occurredAt.current,
-    });
-
-    if (error) {
-      if (isDefinitiveFailure(error)) {
-        // Rolled back on the server: nothing saved. A fresh id is used next time.
-        orderId.current = null;
-        occurredAt.current = null;
-        setPhase({ kind: "error", message: error.message });
-      } else {
-        setPhase({
-          kind: "unconfirmed",
-          message: navigator.onLine ? "No reply from the server." : "No internet connection.",
-        });
-      }
-      return;
+    const items = `${itemCount} item${itemCount === 1 ? "" : "s"} · ${formatINR(total)}`;
+    if (r.outcome === "synced") {
+      const result = r.data as SaleResult;
+      if (result.status === "created") setToday((t) => ({ orders: t.orders + 1, sales: t.sales + Number(result.total_amount) }));
+      setToast({
+        tone: "ok",
+        text: `Order saved · ${items}`,
+        warning: result.negative_materials.length
+          ? `Stock is below zero for ${result.negative_materials.join(", ")}. Tell the owner.`
+          : undefined,
+      });
+    } else {
+      setToday((t) => ({ orders: t.orders + 1, sales: t.sales + total }));
+      setToast({ tone: "queued", text: `Saved on this phone · ${items}`, warning: "It will sync automatically when the connection is back." });
     }
-
-    const result = data as SaleResult;
-    if (result.status === "created") {
-      setToday((t) => ({ orders: t.orders + 1, sales: t.sales + Number(result.total_amount) }));
-    }
-    setToast({
-      text: `Order saved · ${result.item_count} item${result.item_count === 1 ? "" : "s"} · ${formatINR(result.total_amount)}`,
-      warning: result.negative_materials.length
-        ? `Stock is below zero for ${result.negative_materials.join(", ")}. Tell the owner.`
-        : undefined,
-    });
     navigator.vibrate?.([15, 40, 15]);
-    reset();
+    setCart({});
   }
 
   return (
@@ -165,11 +137,6 @@ export function SellScreen({
       {/* Order bar sits just above the bottom tab bar. */}
       <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-10 border-t border-line bg-surface/95 backdrop-blur">
         <div className="mx-auto flex max-w-md flex-col gap-2 px-4 py-3">
-          {phase.kind === "unconfirmed" && (
-            <div role="alert" className="rounded-lg bg-warn/10 px-3 py-2 text-sm font-medium text-warn">
-              Not confirmed yet — {phase.message} Tap <b>Retry</b>. It will not be counted twice.
-            </div>
-          )}
           {phase.kind === "error" && (
             <div role="alert" className="rounded-lg bg-danger/10 px-3 py-2 text-sm font-medium text-danger">
               Not saved: {phase.message}
@@ -182,24 +149,18 @@ export function SellScreen({
                 {itemCount} item{itemCount === 1 ? "" : "s"}
               </p>
             </div>
-            {phase.kind === "unconfirmed" ? (
-              <button type="button" onClick={reset} className="btn btn-secondary px-3 text-sm">
-                Discard
+            {itemCount > 0 && (
+              <button type="button" onClick={reset} disabled={locked} className="btn btn-secondary px-4">
+                Clear
               </button>
-            ) : (
-              itemCount > 0 && (
-                <button type="button" onClick={reset} disabled={locked} className="btn btn-secondary px-4">
-                  Clear
-                </button>
-              )
             )}
             <button
               type="button"
               onClick={submit}
-              disabled={itemCount === 0 || phase.kind === "sending"}
+              disabled={itemCount === 0 || busy}
               className="btn btn-primary min-h-14 flex-[1.4] text-lg"
             >
-              {phase.kind === "sending" ? "Saving…" : phase.kind === "unconfirmed" ? "Retry" : "Submit order"}
+              {busy ? "Saving…" : "Submit order"}
             </button>
           </div>
         </div>
@@ -209,7 +170,9 @@ export function SellScreen({
       {toast && (
         <div
           role="status"
-          className="fixed inset-x-4 top-[max(4.5rem,calc(env(safe-area-inset-top)+4rem))] z-20 mx-auto max-w-md rounded-2xl bg-ok px-4 py-3 text-brand-ink shadow-lg"
+          className={`fixed inset-x-4 top-[max(4.5rem,calc(env(safe-area-inset-top)+4rem))] z-20 mx-auto max-w-md rounded-2xl px-4 py-3 text-brand-ink shadow-lg ${
+            toast.tone === "ok" ? "bg-ok" : "bg-warn"
+          }`}
         >
           <p className="text-base font-bold">✓ {toast.text}</p>
           {toast.warning && <p className="mt-1 rounded-lg bg-white/15 px-2 py-1 text-sm">{toast.warning}</p>}

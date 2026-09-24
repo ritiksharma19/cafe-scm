@@ -19,9 +19,10 @@ export function SubmitStatus({ phase }: { phase: SubmitPhase }) {
   return null;
 }
 
-export function SuccessBanner({ text, onDone }: { text: string; onDone?: () => void }) {
+/** Green = the server has it. Amber = saved on this phone, will sync when online. */
+export function SuccessBanner({ text, onDone, queued = false }: { text: string; onDone?: () => void; queued?: boolean }) {
   return (
-    <div role="status" className="flex items-center justify-between gap-3 rounded-xl bg-ok px-4 py-3 text-brand-ink">
+    <div role="status" className={`flex items-center justify-between gap-3 rounded-xl px-4 py-3 text-brand-ink ${queued ? "bg-warn" : "bg-ok"}`}>
       <p className="font-bold">✓ {text}</p>
       {onDone && (
         <button type="button" onClick={onDone} className="text-sm font-semibold underline">

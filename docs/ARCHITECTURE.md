@@ -271,7 +271,8 @@ Typical owner loop: see "Chicken ~1.5 days" → **Create transfer Central → Ca
 
 ## 9. Offline strategy
 
-- **App shell** (HTML/JS/CSS, icons) precached by the service worker; **catalog** (active products, materials, units, suppliers) cached in IndexedDB and refreshed whenever online. Worker screens therefore open with no network.
+- **Screens:** while online, the worker layout asks the service worker to save fresh copies of every worker screen *and the scripts/styles they use*. The catalog (products, prices, materials, units) is inside those pages, so worker screens open with no network. Offline, links do a full page load so the service worker can answer from its saved copies (in-app navigation would need the server).
+- **Implemented in** `src/lib/offline/` (engine, IndexedDB store, React hooks) and `public/sw.js`; the engine is unit-tested with an in-memory store and with a real IndexedDB implementation.
 - **Outbox** (IndexedDB): every sale / receipt / wastage is stored with a **client-generated UUID** and `occurred_at` *before* any network call.
 - **Sync loop:** runs on submit, on `online` event, on app focus, and every 30 s while items are pending. Sends items **in order**; the RPC's `ON CONFLICT (id) DO NOTHING` makes retries harmless (network drop after commit → retry returns "already recorded" → item marked synced).
 - **Failures:** transient (network/5xx) → retry with backoff. Permanent (validation, e.g. product disabled) → item moved to "Needs attention" list visible to the worker and admin; never silently dropped.

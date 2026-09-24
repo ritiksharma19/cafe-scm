@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { Catalog } from "@/lib/catalog";
 import { formatINR } from "@/lib/format";
-import { useRpcSubmit } from "@/lib/useRpcSubmit";
+import { useDocSubmit } from "@/lib/offline/useDocSubmit";
 import { LinesEditor, useLines } from "./LinesEditor";
 import { SubmitStatus, SuccessBanner } from "./SubmitStatus";
 
@@ -18,7 +18,8 @@ interface ReceiptResult {
 export function ReceiptForm({ catalog, chooseLocation = false }: { catalog: Catalog; chooseLocation?: boolean }) {
   const router = useRouter();
   const lines = useLines(catalog, { withCost: true });
-  const rpc = useRpcSubmit<ReceiptResult>("record_receipt", "p_receipt_id");
+  // Workers: through the phone outbox (works offline). Admin: straight to the server.
+  const rpc = useDocSubmit<ReceiptResult>("receipt", "record_receipt", "p_receipt_id", { offline: !chooseLocation });
   const [locationId, setLocationId] = useState(
     chooseLocation ? (catalog.locations.find((l) => l.type === "central")?.id ?? "") : "",
   );
@@ -26,7 +27,7 @@ export function ReceiptForm({ catalog, chooseLocation = false }: { catalog: Cata
   const [invoice, setInvoice] = useState("");
   const [notes, setNotes] = useState("");
   const [showMore, setShowMore] = useState(false);
-  const [done, setDone] = useState<string | null>(null);
+  const [done, setDone] = useState<{ text: string; queued: boolean } | null>(null);
 
   async function confirm() {
     const items = lines.collect();
@@ -45,12 +46,18 @@ export function ReceiptForm({ catalog, chooseLocation = false }: { catalog: Cata
         p_notes: notes || null,
         p_location_id: chooseLocation ? locationId : null,
       },
-      { withOccurredAt: true },
+      `Received ${items.map((l) => l.material.name).join(", ")}`,
     );
     if (!result) return;
     const count = items.length;
+    const what = `${count} item${count === 1 ? "" : "s"}`;
     setDone(
-      `Stock received · ${count} item${count === 1 ? "" : "s"}${result.total_cost > 0 ? ` · ${formatINR(result.total_cost)}` : ""}`,
+      result.queued
+        ? { text: `Saved on this phone · ${what} — will sync when online`, queued: true }
+        : {
+            text: `Stock received · ${what}${result.data.total_cost > 0 ? ` · ${formatINR(result.data.total_cost)}` : ""}`,
+            queued: false,
+          },
     );
     lines.clearAll();
     setSupplierId("");
@@ -63,7 +70,7 @@ export function ReceiptForm({ catalog, chooseLocation = false }: { catalog: Cata
 
   return (
     <div className="flex flex-col gap-4">
-      {done && <SuccessBanner text={done} onDone={() => setDone(null)} />}
+      {done && <SuccessBanner text={done.text} queued={done.queued} onDone={() => setDone(null)} />}
 
       {chooseLocation && (
         <label className="block">

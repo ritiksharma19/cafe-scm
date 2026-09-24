@@ -1,5 +1,3 @@
-import type { PostgrestError } from "@supabase/supabase-js";
-
 export interface SaleResult {
   status: "created" | "duplicate";
   order_id: string;
@@ -13,7 +11,7 @@ export interface SaleResult {
  * the order was definitely NOT saved. Anything else (fetch failure, timeout, 5xx gateway)
  * leaves the outcome unknown, so the client must retry with the SAME order id.
  */
-export function isDefinitiveFailure(error: Pick<PostgrestError, "code"> | null | undefined): boolean {
+export function isDefinitiveFailure(error: { code?: string } | null | undefined): boolean {
   if (!error?.code) return false;
   return /^[0-9A-Z]{5}$/.test(error.code) || error.code.startsWith("PGRST");
 }

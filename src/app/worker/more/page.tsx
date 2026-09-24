@@ -19,6 +19,7 @@ export default async function MorePage() {
       <section className="card divide-y divide-line">
         {[
           ["/worker/activity", "Today's activity"],
+          ["/worker/sync", "Waiting to sync"],
           ["/worker/requests", "Request stock"],
           ["/worker/send", "Send stock to another location"],
           ["/worker/stock/count", "Count stock"],
@@ -28,7 +29,7 @@ export default async function MorePage() {
           </Link>
         ))}
       </section>
-      <SignOutButton className="btn btn-secondary w-full" />
+      <SignOutButton className="btn btn-secondary w-full" checkOutbox />
     </div>
   );
 }
