@@ -29,7 +29,7 @@ if (!url || !secret || !domain) {
 
 const login = rawUsername.trim().toLowerCase();
 const isEmail = login.includes("@");
-if (isEmail && !/^[^@s]+@[^@s]+.[^@s]+$/.test(login)) {
+if (isEmail && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(login)) {
   console.error("That does not look like an email address.");
   exit(1);
 }
