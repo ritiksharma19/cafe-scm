@@ -7,6 +7,7 @@
  *
  * Cell values: a number (pieces) or a number with a unit suffix (gm, g, kg, ml, l, pcs…).
  * Blank cells mean the product does not use that material.
+ * An optional column headed "Price" / "Selling price" / "MRP" sets the product price.
  */
 
 export type BaseUnit = "g" | "ml" | "pcs";
@@ -26,6 +27,7 @@ export interface RecipeSheetProduct {
   name: string;
   row: number; // 1-based spreadsheet row, for error messages
   items: RecipeSheetItem[];
+  price: number | null; // from the optional price column
 }
 
 export interface RecipeSheetMaterial {
@@ -59,6 +61,8 @@ const UNIT_ALIASES: Record<string, { code: string; base: BaseUnit; factor: numbe
   no: { code: "pcs", base: "pcs", factor: 1 },
 };
 
+const PRICE_HEADER = /^(selling\s*)?price(\s*\(.*\))?$|^mrp$|^rate$/i;
+
 const QTY_PATTERN = /^(\d+(?:\.\d+)?|\.\d+)\s*([a-z]*)\.?$/;
 
 /** Parses "20gm", "1.5 kg", "200ml", "1", 0.5 → base-unit quantity. Returns null for blanks. */
@@ -88,9 +92,15 @@ export function parseRecipeSheet(rows: unknown[][]): RecipeSheetResult {
   const header = rows[headerIndex];
   const columns: { index: number; name: string }[] = [];
   const seen = new Set<string>();
+  let priceIndex = -1;
   for (let i = 1; i < header.length; i++) {
     const name = String(header[i] ?? "").trim().replace(/\s+/g, " ");
     if (!name) continue;
+    if (PRICE_HEADER.test(name)) {
+      if (priceIndex >= 0) errors.push(`More than one price column ("${name}").`);
+      priceIndex = i;
+      continue;
+    }
     const key = name.toLowerCase();
     if (seen.has(key)) errors.push(`Raw material "${name}" appears in more than one column.`);
     seen.add(key);
@@ -129,11 +139,33 @@ export function parseRecipeSheet(rows: unknown[][]): RecipeSheetResult {
       items.push({ material: col.name, ...parsed });
     }
     if (items.length === 0) errors.push(`Row ${rowNo}: product "${name}" has no ingredients.`);
-    products.push({ name, row: rowNo, items });
+
+    let price: number | null = null;
+    if (priceIndex >= 0) {
+      const raw = row[priceIndex];
+      const text = String(raw ?? "").replace(/[₹,\s]/g, "").replace(/^rs\.?/i, "");
+      if (text !== "") {
+        const n = typeof raw === "number" ? raw : Number(text);
+        if (!Number.isFinite(n) || n < 0) errors.push(`Row ${rowNo} (${name}): price "${String(raw).trim()}" is not a number.`);
+        else price = Math.round(n * 100) / 100;
+      }
+    }
+    products.push({ name, row: rowNo, items, price });
   }
 
   const materials = [...materialUnits.values()].map(({ name, baseUnit }) => ({ name, baseUnit }));
   return { products, materials, errors };
+}
+
+/**
+ * The inverse of parseQuantityCell, for exports: base quantity → cell in the sheet's
+ * own style ("20gm", "200ml", or a plain number for pieces).
+ */
+export function formatQuantityCell(quantity: number, baseUnit: string): string | number {
+  const q = round3(quantity);
+  if (baseUnit === "g") return `${q}gm`;
+  if (baseUnit === "ml") return `${q}ml`;
+  return q;
 }
 
 function round3(n: number): number {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import * as XLSX from "xlsx";
-import { parseQuantityCell, parseRecipeSheet } from "./recipe-sheet";
+import { formatQuantityCell, parseQuantityCell, parseRecipeSheet } from "./recipe-sheet";
 
 describe("parseQuantityCell", () => {
   it("reads suffixed and plain quantities into base units", () => {
@@ -34,6 +34,31 @@ describe("parseRecipeSheet", () => {
       ["Juice", "10ml"],
     ]);
     expect(r.errors).toContain("Row 3 (Juice), Sugar: measured in ml but row 2 uses g.");
+  });
+
+  it("reads an optional price column and does not treat it as a material", () => {
+    const r = parseRecipeSheet([
+      ["Product", "Price", "Bun"],
+      ["Burger", "₹1,20", 1],
+      ["Tea", 15, 1],
+      ["Roll", "", 1],
+      ["Bad", "abc", 1],
+    ]);
+    expect(r.materials.map((m) => m.name)).toEqual(["Bun"]);
+    expect(r.products.map((p) => p.price)).toEqual([120, 15, null, null]);
+    expect(r.errors).toEqual(['Row 5 (Bad): price "abc" is not a number.']);
+  });
+
+  it("exported cells parse back to the same quantities", () => {
+    for (const [qty, unit] of [
+      [20, "g"],
+      [2500, "g"],
+      [200, "ml"],
+      [0.5, "pcs"],
+      [1, "pcs"],
+    ] as const) {
+      expect(parseQuantityCell(formatQuantityCell(qty, unit))).toMatchObject({ quantity: qty, baseUnit: unit });
+    }
   });
 
   it("parses the sample workbook", () => {

@@ -25,7 +25,8 @@
     "next": "16.3.6",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",
@@ -38,8 +39,7 @@
     "supabase": "^2.117.0",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^5.0.1",
-    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+    "vitest": "^5.0.1"
   },
   "engines": {
     "node": ">=22"

@@ -48,7 +48,7 @@ beforeAll(async () => {
     const r = await tx.query<{ r: Record<string, number> }>("select public.import_recipe_sheet($1) as r", [
       JSON.stringify(sampleSheet()),
     ]);
-    expect(r.rows[0].r).toEqual({ materials_created: 23, products_created: 5, recipes_created: 5, recipes_unchanged: 0 });
+    expect(r.rows[0].r).toEqual({ materials_created: 23, products_created: 5, recipes_created: 5, recipes_unchanged: 0, prices_updated: 0 });
 
     for (const row of (await tx.query<{ id: string; name: string }>("select id, name from public.products")).rows) {
       product[row.name] = row.id;
@@ -355,7 +355,7 @@ describe("recipe versioning", () => {
       const again = await tx.query<{ r: Record<string, number> }>("select public.import_recipe_sheet($1) as r", [
         JSON.stringify(sheet),
       ]);
-      expect(again.rows[0].r).toEqual({ materials_created: 0, products_created: 0, recipes_created: 0, recipes_unchanged: 5 });
+      expect(again.rows[0].r).toEqual({ materials_created: 0, products_created: 0, recipes_created: 0, recipes_unchanged: 5, prices_updated: 0 });
 
       const fries = sheet.products.find((p) => p.name === "Fries")!;
       fries.items.find((i) => i.material === "Frozen Fries")!.quantity = 180;

@@ -10,6 +10,7 @@ const GROUPS = [
       { href: "/admin", label: "Dashboard" },
       { href: "/admin/inventory", label: "Inventory" },
       { href: "/admin/analytics", label: "Analytics" },
+      { href: "/admin/reports", label: "Reports & export" },
     ],
   },
   {
@@ -27,6 +28,7 @@ const GROUPS = [
     title: "Setup",
     links: [
       { href: "/admin/products", label: "Products & recipes" },
+      { href: "/admin/import", label: "Import from Excel" },
       { href: "/admin/materials", label: "Raw materials" },
       { href: "/admin/suppliers", label: "Suppliers" },
       { href: "/admin/users", label: "Users" },

@@ -14,8 +14,8 @@ Workers record events (sales, receipts, wastage); the database calculates invent
 | 2 | Worker sales + atomic recipe-based deduction, recipe versioning, void, orders/products admin | ✅ |
 | 3 | Receiving (weighted-average cost), wastage, transfers, requests, blind stock counts + approval, suppliers | ✅ |
 | 4 | Dashboard ("needs attention", KPIs, alerts, carts), inventory matrix + history, runway, analytics, live updates, materials/recipes/settings admin | ✅ |
-| 5 | Excel import/export | next |
-| 6 | Offline outbox + idempotent sync | |
+| 5 | Excel import (preview, row-level validation, all-or-nothing, prices) and CSV/Excel exports of 7 reports | ✅ |
+| 6 | Offline outbox + idempotent sync | next |
 
 ## One-time setup
 
@@ -91,3 +91,9 @@ with tests under `tests/db/`. The test harness (`tests/db/harness.ts`) emulates 
 | Mojito  |            |            |       | 0.5   |
 
 Plain numbers are pieces; `g/gm/kg` and `ml/l` suffixes are converted to grams / millilitres.
+An optional **Price** column (also `Selling price` / `MRP`) sets product prices.
+
+Import it under **Admin → Import from Excel**: the app shows every new material, new product, recipe change
+and price change before saving, and saves all-or-nothing. **Admin → Reports & export** downloads sales,
+inventory, stock movements, purchases, wastage, ingredient consumption and the recipes (in this same
+format, so they can be edited and re-imported) as Excel or CSV.
