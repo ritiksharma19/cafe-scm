@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import { updateProduct, type ProductResult } from "./actions";
+import { createProduct, updateProduct, type ProductResult } from "./actions";
 
 export function ProductForm({
   id,
@@ -44,6 +44,27 @@ export function ProductForm({
       </button>
       {state.error && <p className="w-full text-sm font-medium text-danger">{state.error}</p>}
       {state.ok && <p className="w-full text-sm font-medium text-ok">Saved.</p>}
+    </form>
+  );
+}
+
+/** Creates a product, then opens its recipe editor (it cannot be sold until it has a recipe). */
+export function NewProductForm() {
+  const [state, action, pending] = useActionState<ProductResult, FormData>(createProduct, {});
+  return (
+    <form action={action} className="flex flex-wrap items-end gap-3">
+      <label className="block min-w-48 flex-1">
+        <span className="mb-1.5 block text-sm font-medium">Name</span>
+        <input name="name" className="field" required />
+      </label>
+      <label className="block w-32">
+        <span className="mb-1.5 block text-sm font-medium">Price (₹)</span>
+        <input name="selling_price" type="number" inputMode="decimal" min="0" step="0.01" className="field" required />
+      </label>
+      <button type="submit" className="btn btn-primary" disabled={pending}>
+        {pending ? "Adding…" : "Add & set recipe"}
+      </button>
+      {state.error && <p className="w-full text-sm font-medium text-danger">{state.error}</p>}
     </form>
   );
 }

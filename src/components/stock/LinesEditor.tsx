@@ -22,8 +22,8 @@ export interface LinesCatalog {
 }
 
 /** State for a multi-item stock document: added lines plus the line being typed. */
-export function useLines(catalog: LinesCatalog, opts: { withCost?: boolean } = {}) {
-  const [lines, setLines] = useState<StockLine[]>([]);
+export function useLines(catalog: LinesCatalog, opts: { withCost?: boolean; initial?: StockLine[] } = {}) {
+  const [lines, setLines] = useState<StockLine[]>(opts.initial ?? []);
   const [material, setMaterial] = useState<Material | null>(null);
   const [qty, setQty] = useState("");
   const [unit, setUnit] = useState<UnitChoice | null>(null);

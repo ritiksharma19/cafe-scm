@@ -1,4 +1,5 @@
 import { formatINR, formatTime, istDayStart } from "@/lib/format";
+import { LiveRefresh } from "@/components/LiveRefresh";
 import { formatQuantity, type UnitInfo } from "@/lib/quantity";
 import { createClient } from "@/lib/supabase/server";
 import type { Location } from "@/lib/types";
@@ -80,7 +81,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/admin/ord
 
   return (
     <div className="flex flex-col gap-5">
-      <h1 className="text-2xl font-bold">Orders</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-2xl font-bold">Orders</h1><LiveRefresh tables={["orders"]} /></div>
 
       <form className="flex flex-wrap items-end gap-3">
         <label className="block">

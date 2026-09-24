@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { LiveRefresh } from "@/components/LiveRefresh";
 import { IncomingTransfer } from "@/components/stock/IncomingTransfer";
 import { requireRole } from "@/lib/auth";
 import { formatQuantity, type UnitInfo } from "@/lib/quantity";
@@ -43,7 +44,10 @@ export default async function StockPage() {
       )}
 
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-bold">Stock at {location?.name}</h1>
+        <div>
+          <h1 className="text-xl font-bold">Stock at {location?.name}</h1>
+          <LiveRefresh tables={["stock_levels", "stock_transfers"]} />
+        </div>
         <Link href="/worker/stock/count" className="btn btn-secondary min-h-11 px-4 text-sm">
           Count stock
         </Link>

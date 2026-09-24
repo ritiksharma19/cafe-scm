@@ -1,7 +1,8 @@
 import { formatINR } from "@/lib/format";
 import { formatQuantity, type UnitInfo } from "@/lib/quantity";
 import { createClient } from "@/lib/supabase/server";
-import { ProductForm } from "./ProductForm";
+import Link from "next/link";
+import { NewProductForm, ProductForm } from "./ProductForm";
 
 export const metadata = { title: "Products" };
 
@@ -42,10 +43,14 @@ export default async function ProductsPage() {
       <div>
         <h1 className="text-2xl font-bold">Products</h1>
         <p className="mt-1 text-sm text-muted">
-          Recipes come from the recipe sheet import. Changing a recipe creates a new version; past orders keep the
-          version they used.
+          Changing a recipe creates a new version; past orders keep the version they used. Products without a recipe
+          cannot be sold.
         </p>
       </div>
+      <section className="card p-5">
+        <h2 className="mb-3 font-bold">Add product</h2>
+        <NewProductForm />
+      </section>
       {error && <p className="text-danger">Could not load products: {error.message}</p>}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -74,7 +79,9 @@ export default async function ProductsPage() {
                   {p.name}
                   {!p.is_active && <span className="ml-2 text-xs font-bold text-danger">INACTIVE</span>}
                 </h2>
-                <span className="text-sm text-muted">{recipe ? `Recipe v${recipe.version}` : "No recipe"}</span>
+                <Link href={`/admin/products/${p.id}`} className="text-sm font-semibold text-brand hover:underline">
+                  {recipe ? `Edit recipe (v${recipe.version})` : "Add recipe"} →
+                </Link>
               </div>
 
               {lines.length > 0 && (

@@ -1,4 +1,5 @@
 import { ActionForm } from "@/components/ActionForm";
+import { LiveRefresh } from "@/components/LiveRefresh";
 import { formatDateTime } from "@/lib/format";
 import { formatQuantity } from "@/lib/quantity";
 import { loadRequests, REQUEST_STATUS_LABEL, REQUEST_STATUS_STYLE } from "@/lib/requests";
@@ -22,7 +23,7 @@ export default async function AdminRequestsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold">Stock requests</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-2xl font-bold">Stock requests</h1><LiveRefresh tables={["stock_requests", "stock_transfers"]} /></div>
 
       <section className="flex flex-col gap-3">
         <h2 className="font-bold">Open ({open.length})</h2>

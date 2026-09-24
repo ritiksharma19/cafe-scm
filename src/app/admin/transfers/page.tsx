@@ -1,4 +1,5 @@
 import { ActionForm } from "@/components/ActionForm";
+import { LiveRefresh } from "@/components/LiveRefresh";
 import { IncomingTransfer } from "@/components/stock/IncomingTransfer";
 import { TransferForm } from "@/components/stock/TransferForm";
 import { loadCatalog } from "@/lib/catalog";
@@ -19,7 +20,7 @@ export default async function TransfersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold">Transfers</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3"><h1 className="text-2xl font-bold">Transfers</h1><LiveRefresh tables={["stock_transfers"]} /></div>
 
       <section className="grid gap-6 lg:grid-cols-2">
         <div className="flex flex-col gap-3">

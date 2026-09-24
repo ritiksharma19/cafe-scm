@@ -13,8 +13,8 @@ Workers record events (sales, receipts, wastage); the database calculates invent
 | 1 | Foundation: schema, RLS, auth (username + PIN), roles, PWA shell, user admin | ✅ |
 | 2 | Worker sales + atomic recipe-based deduction, recipe versioning, void, orders/products admin | ✅ |
 | 3 | Receiving (weighted-average cost), wastage, transfers, requests, blind stock counts + approval, suppliers | ✅ |
-| 4 | Admin dashboard, alerts, runway, analytics, realtime | next |
-| 5 | Excel import/export | |
+| 4 | Dashboard ("needs attention", KPIs, alerts, carts), inventory matrix + history, runway, analytics, live updates, materials/recipes/settings admin | ✅ |
+| 5 | Excel import/export | next |
 | 6 | Offline outbox + idempotent sync | |
 
 ## One-time setup
