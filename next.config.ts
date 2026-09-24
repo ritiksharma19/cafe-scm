@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Development only: lets phones on the same Wi-Fi open the dev server
+  // (e.g. http://192.168.1.6:3000). Has no effect on the Vercel deployment.
+  allowedDevOrigins: ["192.168.*.*", "10.*.*.*"],
   async headers() {
     return [
       {
