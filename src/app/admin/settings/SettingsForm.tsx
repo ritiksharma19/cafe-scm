@@ -10,6 +10,7 @@ export interface Settings {
   runway_window_days: number;
   min_history_days: number;
   reorder_cover_days: number;
+  worker_discount_limit_pct: number;
   allow_negative_on_sale: boolean;
   allow_negative_other: boolean;
 }
@@ -51,6 +52,17 @@ export function SettingsForm({ settings }: { settings: Settings }) {
         {num("runway_window_days", "Average daily use over the last … days", "Rolling window for “days left”. 7 or 14 works well.", 1, 90)}
         {num("min_history_days", "Minimum days of history", "Below this, the app shows “insufficient data” instead of an estimate.", 1, 90)}
         {num("reorder_cover_days", "Suggested order covers … days", "Suggested order = daily use × (lead time + these days) − stock, unless a target stock is set.", 1, 60)}
+      </section>
+
+      <section className="card flex flex-col gap-4 p-5">
+        <h2 className="font-bold">Selling</h2>
+        {num(
+          "worker_discount_limit_pct",
+          "Workers may give a discount of up to … % of an order",
+          "0 = no discounts on the Sell screen. Every discount is recorded and shown in the P&L and on each order.",
+          0,
+          100,
+        )}
       </section>
 
       <section className="card flex flex-col gap-4 p-5">

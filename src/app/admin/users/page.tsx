@@ -1,3 +1,4 @@
+import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Location, Profile } from "@/lib/types";
 import { CreateWorkerForm, EditWorkerForm, ResetPinForm } from "./forms";
@@ -5,6 +6,7 @@ import { CreateWorkerForm, EditWorkerForm, ResetPinForm } from "./forms";
 export const metadata = { title: "Users" };
 
 export default async function UsersPage() {
+  const { business } = await requireRole("admin");
   const supabase = await createClient();
   const [{ data: profiles }, { data: locations }] = await Promise.all([
     supabase
@@ -21,7 +23,12 @@ export default async function UsersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold">Users</h1>
+      <div>
+        <h1 className="text-2xl font-bold">Users</h1>
+        <p className="mt-1 text-sm text-muted">
+          Workers sign in with cafe code <b className="tracking-wider text-ink">{business.code}</b>, their username and a 6-digit PIN.
+        </p>
+      </div>
 
       <section className="card p-5">
         <h2 className="mb-4 font-bold">Add worker</h2>
@@ -46,7 +53,7 @@ export default async function UsersPage() {
                 <ResetPinForm userId={p.id} />
               </div>
             ) : (
-              <p className="text-sm text-muted">Admin accounts are managed from the Supabase dashboard.</p>
+              <p className="text-sm text-muted">Owner accounts are managed by support.</p>
             )}
           </article>
         ))}

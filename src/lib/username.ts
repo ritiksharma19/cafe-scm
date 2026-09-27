@@ -14,3 +14,20 @@ export function loginEmail(usernameOrEmail: string, domain: string): string {
   const value = normalizeUsername(usernameOrEmail);
   return value.includes("@") ? value : `${value}@${domain}`;
 }
+
+/** Cafe codes, typed once on each phone at login (matches businesses.code). */
+export const BUSINESS_CODE_PATTERN = /^[A-Z0-9]{3,16}$/;
+
+export function normalizeBusinessCode(input: string): string {
+  return input.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+/**
+ * Sign-in address for users created from inside the app. The cafe code keeps
+ * usernames independent between businesses ("ravi" can exist in every cafe).
+ * Sign-in never rebuilds this address: it looks the user up by code + username,
+ * so accounts created before multi-business (plain username@domain) keep working.
+ */
+export function businessLoginEmail(code: string, username: string, domain: string): string {
+  return `${normalizeBusinessCode(code).toLowerCase()}.${normalizeUsername(username)}@${domain}`;
+}

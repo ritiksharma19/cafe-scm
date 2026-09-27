@@ -2,7 +2,7 @@ import { formatINR } from "@/lib/format";
 import { formatQuantity, type UnitInfo } from "@/lib/quantity";
 import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { NewProductForm, ProductForm } from "./ProductForm";
+import { AddSizeForm, NewProductForm, ProductForm } from "./ProductForm";
 
 export const metadata = { title: "Products" };
 
@@ -10,8 +10,11 @@ interface ProductRow {
   id: string;
   name: string;
   selling_price: string;
+  category: string | null;
   sort_order: number;
   is_active: boolean;
+  variant_of: string | null;
+  variant_label: string | null;
   product_recipes: {
     version: number;
     effective_to: string | null;
@@ -28,7 +31,7 @@ export default async function ProductsPage() {
     supabase
       .from("products")
       .select(
-        "id, name, selling_price, sort_order, is_active, product_recipes(version, effective_to, recipe_items(quantity, material:raw_materials(name, display_unit, base_unit, avg_unit_cost)))",
+        "id, name, selling_price, category, sort_order, is_active, variant_of, variant_label, product_recipes(version, effective_to, recipe_items(quantity, material:raw_materials(name, display_unit, base_unit, avg_unit_cost)))",
       )
       .is("product_recipes.effective_to", null)
       .order("sort_order")
@@ -37,6 +40,13 @@ export default async function ProductsPage() {
     supabase.from("units").select("code, factor_to_base").returns<UnitInfo[]>(),
   ]);
   const unitByCode = new Map((units ?? []).map((u) => [u.code, u]));
+  const categories = [...new Set((products ?? []).map((p) => p.category?.trim()).filter((c): c is string => !!c))].sort();
+  // Sizes are listed right after their main product.
+  const sizesOf = (id: string) => (products ?? []).filter((x) => x.variant_of === id);
+  const nameOf = new Map((products ?? []).map((p) => [p.id, p.name]));
+  const ordered = (products ?? [])
+    .filter((p) => !p.variant_of || !nameOf.has(p.variant_of))
+    .flatMap((p) => [p, ...sizesOf(p.id)]);
 
   return (
     <div className="flex flex-col gap-5">
@@ -44,17 +54,17 @@ export default async function ProductsPage() {
         <h1 className="text-2xl font-bold">Products</h1>
         <p className="mt-1 text-sm text-muted">
           Changing a recipe creates a new version; past orders keep the version they used. Products without a recipe
-          cannot be sold.
+          cannot be sold. Menu sections (e.g. Burgers, Drinks) become tabs on the worker&apos;s Sell screen.
         </p>
       </div>
       <section className="card p-5">
         <h2 className="mb-3 font-bold">Add product</h2>
-        <NewProductForm />
+        <NewProductForm categories={categories} />
       </section>
       {error && <p className="text-danger">Could not load products: {error.message}</p>}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {(products ?? []).map((p) => {
+        {ordered.map((p) => {
           const recipe = p.product_recipes[0];
           const lines = (recipe?.recipe_items ?? [])
             .filter((i) => i.material)
@@ -77,6 +87,9 @@ export default async function ProductsPage() {
               <div className="flex items-baseline justify-between gap-3">
                 <h2 className="text-lg font-bold">
                   {p.name}
+                  {p.variant_of && (
+                    <span className="ml-2 rounded-full bg-bg px-2 py-0.5 text-xs font-bold text-muted">size of {nameOf.get(p.variant_of)}</span>
+                  )}
                   {!p.is_active && <span className="ml-2 text-xs font-bold text-danger">INACTIVE</span>}
                 </h2>
                 <Link href={`/admin/products/${p.id}`} className="text-sm font-semibold text-brand hover:underline">
@@ -122,7 +135,29 @@ export default async function ProductsPage() {
                 </div>
               </dl>
 
-              <ProductForm id={p.id} price={p.selling_price} sortOrder={p.sort_order} active={p.is_active} />
+              <ProductForm
+                id={p.id}
+                price={p.selling_price}
+                sortOrder={p.sort_order}
+                active={p.is_active}
+                category={p.category}
+                categories={categories}
+                sizeLabel={p.variant_label}
+                showSizeLabel={!!p.variant_of || sizesOf(p.id).length > 0}
+              />
+              {!p.variant_of && (
+                <details className="rounded-xl border border-line p-3">
+                  <summary className="cursor-pointer text-sm font-semibold text-brand">
+                    {sizesOf(p.id).length
+                      ? `Sizes: ${[p.variant_label || "Regular", ...sizesOf(p.id).map((s) => s.variant_label)].join(" · ")} — add another`
+                      : "+ Add sizes (e.g. Small / Large)"}
+                  </summary>
+                  <p className="my-2 text-xs text-muted">
+                    Each size has its own price and recipe (it starts as a copy of this one). Workers tap {p.name} and pick the size.
+                  </p>
+                  <AddSizeForm baseId={p.id} />
+                </details>
+              )}
             </article>
           );
         })}

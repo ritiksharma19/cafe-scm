@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "vitest";
-import { as, asOwner, createTestDb, createUser, locationId, rejects, type Db } from "./harness";
+import { as, asOwner, createTestDb, createUser, firstBusinessId, locationId, rejects, type Db } from "./harness";
 
 let db: Db;
 let admin: string;
@@ -8,6 +8,7 @@ let worker2: string;
 let cart1: string;
 let cart2: string;
 let bunId: string;
+let biz: string;
 
 beforeAll(async () => {
   db = await createTestDb();
@@ -16,10 +17,12 @@ beforeAll(async () => {
   worker2 = await createUser(db, { username: "sunil", role: "worker", locationCode: "CART2" });
   cart1 = await locationId(db, "CART1");
   cart2 = await locationId(db, "CART2");
+  biz = await firstBusinessId(db);
 
   // Operational fixture data written as owner (as RPCs will do in later phases).
   const m = await db.query<{ id: string }>(
-    `insert into public.raw_materials (name, base_unit, display_unit) values ('Burger Bun', 'pcs', 'pcs') returning id`,
+    `insert into public.raw_materials (business_id, name, base_unit, display_unit) values ($1, 'Burger Bun', 'pcs', 'pcs') returning id`,
+    [biz],
   );
   bunId = m.rows[0].id;
   for (const [loc, qty] of [
@@ -52,14 +55,14 @@ describe("reference data", () => {
 
   it("allows only one central location", async () => {
     await rejects(
-      asOwner(db, (tx) => tx.query(`insert into public.locations (code, name, type) values ('C2','Other','central')`)),
+      asOwner(db, (tx) => tx.query(`insert into public.locations (business_id, code, name, type) values ($1, 'C2','Other','central')`, [biz])),
       /duplicate key/,
     );
   });
 
   it("defaults to IST and flags-not-blocks negative stock on sales", async () => {
     const r = await db.query<{ timezone: string; allow_negative_on_sale: boolean; allow_negative_other: boolean }>(
-      "select timezone, allow_negative_on_sale, allow_negative_other from public.app_settings",
+      "select timezone, allow_negative_on_sale, allow_negative_other from public.business_settings",
     );
     expect(r.rows[0]).toEqual({ timezone: "Asia/Kolkata", allow_negative_on_sale: true, allow_negative_other: false });
   });
@@ -81,11 +84,12 @@ describe("profiles", () => {
     await rejects(
       asOwner(db, async (tx) => {
         const u = await tx.query<{ id: string }>("insert into auth.users (email) values ($1) returning id", ["nocart@test.local"]);
-        await tx.query("insert into public.profiles (id, username, full_name, role) values ($1, $2, $3, $4)", [
+        await tx.query("insert into public.profiles (id, username, full_name, role, business_id) values ($1, $2, $3, $4, $5)", [
           u.rows[0].id,
           "nocart",
           "No Cart",
           "worker",
+          biz,
         ]);
       }),
       /profiles_worker_has_location/,
@@ -235,7 +239,7 @@ describe("admin master data", () => {
   it("admin cannot delete products (deactivate instead)", async () => {
     await rejects(
       asOwner(db, async (tx) => {
-        await tx.query(`insert into public.products (name) values ('Temp')`);
+        await tx.query(`insert into public.products (business_id, name) values ($1, 'Temp')`, [biz]);
         await tx.query(`delete from public.products`);
       }),
       /append-only/,

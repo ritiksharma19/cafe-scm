@@ -135,3 +135,47 @@ export function pctChange(now: number, before: number): string | null {
   const pct = Math.round(((now - before) / before) * 100);
   return `${pct > 0 ? "+" : pct < 0 ? "−" : "±"}${Math.abs(pct)}%`;
 }
+
+export interface ProfitTotals {
+  orders: number;
+  gross_sales: number;
+  discounts: number;
+  net_sales: number;
+  cogs: number;
+  gross_profit: number;
+  gross_margin_pct: number | null;
+  wastage_cost: number;
+  stock_variance: number;
+  expenses: number;
+  shared_expenses: number;
+  net_profit: number;
+  net_margin_pct: number | null;
+}
+
+export interface ProfitSummary {
+  current: ProfitTotals;
+  previous: ProfitTotals;
+  expenses_by_category: { category: string; amount: number }[];
+  payments: { method: string; orders: number; amount: number }[];
+  by_location: (ProfitTotals & { location_id: string; name: string; type: "central" | "cart" })[];
+  daily: { day: string; net_sales: number; cogs: number; gross_profit: number; stock_loss: number; expenses: number; net_profit: number }[];
+}
+
+export interface ProductProfitRow {
+  product_id: string;
+  name: string;
+  category: string | null;
+  quantity: number;
+  sales: string;
+  cogs: string;
+  profit: string;
+  margin_pct: string | null;
+}
+
+export const getProfitSummary = (from: Date, to: Date, locationId: string | null) =>
+  rpc<ProfitSummary>("profit_summary", period(from, to, locationId));
+export const getProductProfit = (from: Date, to: Date, locationId: string | null) =>
+  rpc<ProductProfitRow[]>("product_profit", period(from, to, locationId));
+
+export const getAddonSales = (from: Date, to: Date, locationId: string | null) =>
+  rpc<{ addon_id: string; name: string; quantity: number; sales: string; cogs: string }[]>("addon_sales", period(from, to, locationId));

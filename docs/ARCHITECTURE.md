@@ -312,3 +312,40 @@ GitHub repo ──push──▶ Vercel (preview per branch, production on main)
 | 6 Offline | Outbox, sync, status indicator | Airplane-mode sale → reconnect → exactly one order. |
 
 (Offline plumbing — client UUIDs + idempotent RPCs — is built into Phase 2 already; Phase 6 adds the queue/UI on top.)
+
+---
+
+## Phase 7 — profit, expenses, payments, more carts (migration `20260930000001`)
+
+| Addition | Design |
+|---|---|
+| **Payment method & discount on orders** | `orders.payment_method` (`cash/upi/card/other`, default cash) and `orders.discount_amount`. `total_amount` stays *what the customer paid*. `record_sale` gained two optional arguments, so orders queued offline by an older app version still sync (as cash, no discount). Workers may discount up to `app_settings.worker_discount_limit_pct` (default 0 = off). |
+| **Expenses** | New `expenses` document table (client UUID, voided never deleted, audited). `location_id` null = whole business (rent, accountant). Workers record for their own cart only, dated today or up to 3 days back (`record_expense`); admin voids (`void_expense`). |
+| **Profit** | `profit_summary(from, to, location)` and `product_profit(...)`. Cost of goods = ingredient cost **frozen on each sale's consumption rows**, joined to the *same completed orders* as the revenue, so voids and later price changes cannot skew it. Net profit = net sales − COGS − wastage ± stock-count differences − expenses. With a location filter, business-wide expenses are reported as `shared_expenses` but not subtracted. |
+| **Locations** | `admin_save_location` adds carts (next `CART<n>` code), renames, reorders, deactivates. Deactivation is refused while the cart has active workers, non-zero stock, or transfers in transit; Central can never be deactivated. Location names are unique. |
+
+UI: Analytics opens with a P&L (gross → net profit, ₹ and %), daily profit chart, profit by location, payment mix, expenses by category and profit per product. Dashboard shows gross/net profit per period and per cart. New admin pages: Expenses, Carts & locations. Worker: payment buttons, optional discount, menu-section tabs, "Repeat last", Record expense, and "Cash to hand over" in Today's activity. Exports: Profit & loss, Expenses; Sales export gained payment + discount.
+
+---
+
+## Phase 8 — several businesses (SaaS), sizes and add-ons (migrations `20261001000001`, `20261001000002`)
+
+### Multi-business
+| Piece | Design |
+|---|---|
+| **`businesses`** | One row per customer: `code` (typed at login, e.g. `CHAIPOINT`), `name`, `status` (`active`/`suspended`), `plan`, `cart_limit`, `notes`. The original data became the first business (code derived from its name). |
+| **`business_id`** | On every master, document and ledger table. Line tables (order_items, recipe_items, …) inherit it from their parent. Uniqueness (location code/name, usernames, product/material/supplier names) is per business. |
+| **Settings** | `app_settings` was renamed `business_settings` (one row per business); a `security_invoker` view named `app_settings` returns the caller's row, so every function that reads settings got per-business settings without being rewritten. |
+| **Isolation, layer 1: RLS** | Every policy is scoped to `my_business_id()`. A suspended business's users behave like signed-out users. |
+| **Isolation, layer 2: `enforce_business()` trigger** | On every business-owned table: fills `business_id`, rejects references to another business's rows (product, material, location, supplier, add-on…), and rejects any write by a signed-in user to a business that is not theirs. Security-definer functions therefore cannot leak across businesses even if one forgets a check. Platform functions opt out explicitly (`app.platform_op`). |
+| **Isolation, layer 3: analytics** | Admin reporting functions resolve the caller's business via `admin_scope()`, filter by it, and refuse another business's location. |
+| **Platform admin** | `platform_admins` table (the product owner). `platform_create_business`, `platform_update_business` (rename, code, plan, cart limit, suspend), `platform_businesses` (usage overview). UI: Admin → Platform → Businesses. |
+| **Login** | Cafe code + username + PIN; the code is remembered on the phone. The server looks the user up by (code, username) and signs in with that account's stored address, so accounts created before multi-business keep working. New accounts use `<code>.<username>@<LOGIN_EMAIL_DOMAIN>`. Owners may also use a real email. |
+| **Plan limit** | `admin_save_location` refuses to add/reactivate carts beyond `cart_limit`. |
+
+### Sizes and add-ons
+| Piece | Design |
+|---|---|
+| **Sizes** | A size is an ordinary product (own price, own versioned recipe, own profit line) with `variant_of` → main product and a `variant_label`. One level only. `create_variant` copies the main recipe as a starting point. The Sell screen shows one tile and a size picker. |
+| **Add-ons** | `addons` (name, price), `addon_items` (ingredients per add-on), `product_addons` (which products offer it; sizes inherit their main product's). `save_addon` replaces ingredients and product links in one transaction. |
+| **Orders** | `order_items` may repeat a product (different add-ons = different lines); `addons_amount` holds the add-on revenue of a line; `order_item_addons` stores each chosen add-on with its price snapshot. Add-on ingredients post as `SALE_CONSUMPTION` rows referencing the same order line, so voids, COGS and product profit include them with no special cases. |

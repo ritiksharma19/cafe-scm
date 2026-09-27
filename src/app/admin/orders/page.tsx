@@ -1,6 +1,8 @@
 import { formatINR, formatTime, istDayStart } from "@/lib/format";
 import { LiveRefresh } from "@/components/LiveRefresh";
+import { paymentMethodLabel, PAYMENT_METHODS } from "@/lib/money";
 import { formatQuantity, type UnitInfo } from "@/lib/quantity";
+import { describeLine } from "@/lib/sell";
 import { createClient } from "@/lib/supabase/server";
 import type { Location } from "@/lib/types";
 import { VoidOrderForm } from "./VoidOrderForm";
@@ -13,10 +15,17 @@ interface OrderRow {
   status: "completed" | "voided";
   item_count: number;
   total_amount: string;
+  discount_amount: string;
+  payment_method: string;
   void_reason: string | null;
   location_id: string;
   worker: { full_name: string } | null;
-  order_items: { id: string; quantity: number; product: { name: string } | null }[];
+  order_items: {
+    id: string;
+    quantity: number;
+    product: { name: string } | null;
+    order_item_addons: { quantity: number; addon: { name: string } | null }[];
+  }[];
 }
 
 interface MovementRow {
@@ -40,7 +49,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/admin/ord
   let query = supabase
     .from("orders")
     .select(
-      "id, occurred_at, status, item_count, total_amount, void_reason, location_id, worker:profiles!orders_worker_id_fkey(full_name), order_items(id, quantity, product:products(name))",
+      "id, occurred_at, status, item_count, total_amount, discount_amount, payment_method, void_reason, location_id, worker:profiles!orders_worker_id_fkey(full_name), order_items(id, quantity, product:products(name), order_item_addons(quantity, addon:addons(name)))",
     )
     .gte("occurred_at", dayStart.toISOString())
     .lt("occurred_at", dayEnd.toISOString())
@@ -78,6 +87,11 @@ export default async function OrdersPage({ searchParams }: PageProps<"/admin/ord
     items: completed.reduce((s, o) => s + o.item_count, 0),
     sales: completed.reduce((s, o) => s + Number(o.total_amount), 0),
   };
+  const byMethod = PAYMENT_METHODS.map((m) => ({
+    label: m.label,
+    amount: completed.filter((o) => o.payment_method === m.value).reduce((s, o) => s + Number(o.total_amount), 0),
+  })).filter((m) => m.amount > 0);
+  const discounts = completed.reduce((s, o) => s + Number(o.discount_amount), 0);
 
   return (
     <div className="flex flex-col gap-5">
@@ -119,6 +133,13 @@ export default async function OrdersPage({ searchParams }: PageProps<"/admin/ord
         ))}
       </div>
 
+      {(byMethod.length > 0 || discounts > 0) && (
+        <p className="text-sm text-muted">
+          {byMethod.map((m) => `${m.label} ${formatINR(m.amount)}`).join(" · ")}
+          {discounts > 0 && ` · discounts given ${formatINR(discounts)}`}
+        </p>
+      )}
+
       {error && <p className="text-danger">Could not load orders: {error.message}</p>}
       {!error && orders?.length === 0 && <p className="card p-5 text-muted">No orders for this day.</p>}
 
@@ -130,8 +151,10 @@ export default async function OrdersPage({ searchParams }: PageProps<"/admin/ord
                 <span className="w-16 font-semibold tabular-nums">{formatTime(o.occurred_at)}</span>
                 <span className="w-20 text-sm text-muted">{locationName.get(o.location_id)}</span>
                 <span className="min-w-0 flex-1 font-medium">
-                  {o.order_items.map((i) => `${i.product?.name ?? "?"} × ${i.quantity}`).join(", ")}
+                  {o.order_items.map(describeLine).join(", ")}
                 </span>
+                <span className="rounded-full bg-bg px-2 py-0.5 text-xs font-bold">{paymentMethodLabel(o.payment_method)}</span>
+                {Number(o.discount_amount) > 0 && <span className="text-xs text-muted">−{formatINR(o.discount_amount)} disc.</span>}
                 {o.status === "voided" && (
                   <span className="rounded-full bg-danger/10 px-2 py-0.5 text-xs font-bold text-danger">VOIDED</span>
                 )}

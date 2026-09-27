@@ -19,3 +19,13 @@ describe("username helpers", () => {
     expect(PIN_PATTERN.test("12a456")).toBe(false);
   });
 });
+
+describe("business login helpers", () => {
+  it("normalises cafe codes and builds per-business sign-in addresses", async () => {
+    const { normalizeBusinessCode, businessLoginEmail, BUSINESS_CODE_PATTERN } = await import("./username");
+    expect(normalizeBusinessCode(" chai-point ")).toBe("CHAIPOINT");
+    expect(BUSINESS_CODE_PATTERN.test("CHAIPOINT")).toBe(true);
+    expect(BUSINESS_CODE_PATTERN.test("AB")).toBe(false);
+    expect(businessLoginEmail("chaipoint", " Ravi ", "staff.example.app")).toBe("chaipoint.ravi@staff.example.app");
+  });
+});

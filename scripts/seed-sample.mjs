@@ -17,12 +17,13 @@ import * as fs from "node:fs";
 import * as XLSX from "xlsx";
 import { parseRecipeSheet } from "../src/lib/recipe-sheet.ts";
 
-const [, , rawUsername] = process.argv;
+const [, , rawUsername, rawCode] = process.argv;
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 const domain = process.env.LOGIN_EMAIL_DOMAIN;
 if (!rawUsername || !url || !key || !domain) {
-  console.error("Usage: npm run seed:sample -- <admin-username-or-email>   (needs .env.local, see .env.example)");
+  console.error("Usage: npm run seed:sample -- <admin-username-or-email> [CAFECODE]   (needs .env.local, see .env.example)");
+  console.error("Give the cafe code for owners created from the Businesses page or create-admin.");
   exit(1);
 }
 
@@ -54,7 +55,9 @@ const username = rawUsername.trim().toLowerCase();
 const password = process.env.ADMIN_PASSWORD ?? (await promptHidden(`Password for ${username} (hidden): `));
 
 const supabase = createClient(url, key, { auth: { persistSession: false } });
-const email = username.includes("@") ? username : `${username}@${domain}`;
+// Owners created per business sign in as <code>.<username>; the original owner as <username>.
+const code = (rawCode ?? "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+const email = username.includes("@") ? username : code ? `${code}.${username}@${domain}` : `${username}@${domain}`;
 const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 if (signInError) fail("Sign-in", signInError);
 

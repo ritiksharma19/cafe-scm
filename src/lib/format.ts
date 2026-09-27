@@ -30,3 +30,8 @@ export function formatTime(iso: string | Date): string {
 export function formatDateTime(iso: string | Date): string {
   return dateTime.format(new Date(iso));
 }
+
+/** The business date (YYYY-MM-DD, India time) containing `at`. */
+export function istDate(at: Date = new Date()): string {
+  return new Date(at.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+}

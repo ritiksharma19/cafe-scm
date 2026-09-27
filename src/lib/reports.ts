@@ -1,14 +1,17 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getMaterialFlow, getStockStatus } from "@/lib/analytics";
+import { getMaterialFlow, getProfitSummary, getStockStatus } from "@/lib/analytics";
 import { round, type Cell } from "@/lib/export";
 import { BUSINESS_TZ } from "@/lib/format";
+import { expenseCategoryLabel, paymentMethodLabel } from "@/lib/money";
 import { MOVEMENT_LABELS } from "@/lib/movements";
 import { formatQuantityCell } from "@/lib/recipe-sheet";
 import { createClient } from "@/lib/supabase/server";
 
 export const REPORTS = {
-  sales: { title: "Sales", description: "Every order line: time, cart, product, quantity, price." },
+  profit: { title: "Profit & loss", description: "Per day: net sales, ingredient cost, gross profit, wastage, expenses, net profit and margins." },
+  sales: { title: "Sales", description: "Every order line: time, cart, product, add-ons, quantity, price, payment method, discount." },
+  expenses: { title: "Expenses", description: "Rent, salaries, gas and other costs: date, location, category, amount." },
   inventory: { title: "Inventory", description: "Current stock at every location, value and status." },
   movements: { title: "Stock movements", description: "The full stock ledger for the period, every change with its reason." },
   purchases: { title: "Purchases", description: "Receipt lines: supplier, bill, quantity, amount paid." },
@@ -68,14 +71,16 @@ export async function buildReport(key: ReportKey, p: ReportParams): Promise<Repo
         quantity: number;
         unit_price: string;
         line_total: string;
+        addons_amount: string;
         product: { name: string } | null;
-        order: { id: string; occurred_at: string; status: string; location: { name: string } | null; worker: { full_name: string } | null };
+        order_item_addons: { quantity: number; addon: { name: string } | null }[];
+        order: { id: string; occurred_at: string; status: string; payment_method: string; discount_amount: string; location: { name: string } | null; worker: { full_name: string } | null };
       };
       const rows = await fetchAll<Row>((a, b) => {
         let q = supabase
           .from("order_items")
           .select(
-            "quantity, unit_price, line_total, product:products(name), order:orders!inner(id, occurred_at, status, location_id, location:locations(name), worker:profiles!orders_worker_id_fkey(full_name))",
+            "quantity, unit_price, line_total, addons_amount, product:products(name), order_item_addons(quantity, addon:addons(name)), order:orders!inner(id, occurred_at, status, payment_method, discount_amount, location_id, location:locations(name), worker:profiles!orders_worker_id_fkey(full_name))",
           )
           .gte("order.occurred_at", p.from.toISOString())
           .lt("order.occurred_at", p.to.toISOString())
@@ -84,13 +89,77 @@ export async function buildReport(key: ReportKey, p: ReportParams): Promise<Repo
         if (p.locationId) q = q.eq("order.location_id", p.locationId);
         return q.returns<Row[]>();
       });
-      rows.sort((x, y) => x.order.occurred_at.localeCompare(y.order.occurred_at));
+      rows.sort((x, y) => x.order.occurred_at.localeCompare(y.order.occurred_at) || x.order.id.localeCompare(y.order.id));
+      // The discount belongs to the whole order: shown once, on its first line, so a column sum is correct.
+      const seen = new Set<string>();
       return {
         sheet: "Sales",
-        header: ["Date", "Time", "Location", "Order ID", "Status", "Product", "Quantity", "Unit price (₹)", "Line total (₹)", "Recorded by"],
+        header: [
+          "Date", "Time", "Location", "Order ID", "Status", "Product", "Quantity", "Unit price (₹)", "Line total (₹)",
+          "Add-ons", "Add-ons (₹)", "Payment", "Order discount (₹)", "Recorded by",
+        ],
+        rows: rows.map((r) => {
+          const first = !seen.has(r.order.id);
+          seen.add(r.order.id);
+          return [
+            d(r.order.occurred_at), t(r.order.occurred_at), r.order.location?.name, r.order.id, r.order.status,
+            r.product?.name, r.quantity, Number(r.unit_price), Number(r.line_total),
+            r.order_item_addons.map((a) => `${a.quantity > 1 ? `${a.quantity}× ` : ""}${a.addon?.name ?? "?"}`).join(", "), Number(r.addons_amount),
+            paymentMethodLabel(r.order.payment_method), first ? Number(r.order.discount_amount) : null, r.order.worker?.full_name,
+          ];
+        }),
+      };
+    }
+
+    case "profit": {
+      const s = await getProfitSummary(p.from, p.to, p.locationId);
+      const pct = (num: number, den: number) => (den > 0 ? round((num / den) * 100, 1) : null);
+      const c = s.current;
+      return {
+        sheet: "Profit & loss",
+        header: [
+          "Date", "Net sales (₹)", "Ingredient cost (₹)", "Gross profit (₹)", "Gross margin %", "Wastage & stock differences (₹)",
+          "Expenses (₹)", "Net profit (₹)", "Net margin %",
+        ],
+        rows: [
+          ...s.daily.map((r) => [
+            r.day, r.net_sales, r.cogs, r.gross_profit, pct(r.gross_profit, r.net_sales), r.stock_loss, r.expenses, r.net_profit,
+            pct(r.net_profit, r.net_sales),
+          ]),
+          [
+            "TOTAL", c.net_sales, c.cogs, c.gross_profit, c.gross_margin_pct, round(c.wastage_cost - c.stock_variance, 2), c.expenses,
+            c.net_profit, c.net_margin_pct,
+          ],
+          ...(c.shared_expenses > 0
+            ? [[`Business-wide expenses not included for this location: ${c.shared_expenses}`]]
+            : []),
+        ],
+      };
+    }
+
+    case "expenses": {
+      type Row = {
+        spent_on: string; category: string; description: string | null; amount: string; payment_method: string; status: string;
+        void_reason: string | null; location: { name: string } | null; recorder: { full_name: string } | null;
+      };
+      const rows = await fetchAll<Row>((a, b) => {
+        let q = supabase
+          .from("expenses")
+          .select("spent_on, category, description, amount, payment_method, status, void_reason, location:locations(name), recorder:profiles!expenses_recorded_by_fkey(full_name)")
+          .gte("spent_on", d(p.from.toISOString()))
+          .lt("spent_on", d(p.to.toISOString()))
+          .order("spent_on")
+          .order("created_at")
+          .range(a, b);
+        if (p.locationId) q = q.eq("location_id", p.locationId);
+        return q.returns<Row[]>();
+      });
+      return {
+        sheet: "Expenses",
+        header: ["Date", "Location", "Category", "Description", "Amount (₹)", "Paid by", "Status", "Void reason", "Recorded by"],
         rows: rows.map((r) => [
-          d(r.order.occurred_at), t(r.order.occurred_at), r.order.location?.name, r.order.id, r.order.status,
-          r.product?.name, r.quantity, Number(r.unit_price), Number(r.line_total), r.order.worker?.full_name,
+          r.spent_on, r.location?.name ?? "Whole business", expenseCategoryLabel(r.category), r.description, Number(r.amount),
+          paymentMethodLabel(r.payment_method), r.status, r.void_reason, r.recorder?.full_name,
         ]),
       };
     }

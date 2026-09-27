@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { loginEmail, normalizeUsername, PIN_PATTERN, USERNAME_PATTERN } from "@/lib/username";
+import { businessLoginEmail, normalizeUsername, PIN_PATTERN, USERNAME_PATTERN } from "@/lib/username";
 
 export interface ActionResult {
   ok?: string;
@@ -15,7 +15,7 @@ const BANNED_FOREVER = "876000h"; // ~100 years; "none" lifts the ban.
 
 async function requireAdmin() {
   const user = await getCurrentUser();
-  if (!user || user.profile.role !== "admin") throw new Error("Not authorised");
+  if (!user || user.profile.role !== "admin" || user.business.status !== "active") throw new Error("Not authorised");
   return user;
 }
 
@@ -50,11 +50,17 @@ export async function createWorker(_prev: ActionResult, formData: FormData): Pro
   if (!cart) return { error: "Choose an active cart." };
 
   const service = createAdminClient();
-  const { data: existing } = await service.from("profiles").select("id").ilike("username", username).maybeSingle();
+  const businessId = admin.profile.business_id;
+  const { data: existing } = await service
+    .from("profiles")
+    .select("id")
+    .eq("business_id", businessId)
+    .eq("username", username)
+    .maybeSingle();
   if (existing) return { error: `Username "${username}" is already taken.` };
 
   const { data, error } = await service.auth.admin.createUser({
-    email: loginEmail(username, emailDomain()),
+    email: businessLoginEmail(admin.business.code, username, emailDomain()),
     password: pin,
     email_confirm: true,
     app_metadata: { username, full_name: fullName, role: "worker", location_id: locationId },
@@ -67,7 +73,7 @@ export async function createWorker(_prev: ActionResult, formData: FormData): Pro
   // The profile carries role and cart; without it the login has no access at all.
   const { error: profileError } = await service
     .from("profiles")
-    .insert({ id: data.user.id, username, full_name: fullName, role: "worker", location_id: locationId });
+    .insert({ id: data.user.id, username, full_name: fullName, role: "worker", location_id: locationId, business_id: businessId });
   if (profileError) {
     await service.auth.admin.deleteUser(data.user.id); // never leave a half-created account
     return {
@@ -85,11 +91,11 @@ export async function createWorker(_prev: ActionResult, formData: FormData): Pro
 
   revalidatePath("/admin/users");
   revalidatePath("/admin");
-  return { ok: `Created ${fullName}. They sign in with username "${username}" and the PIN you set.` };
+  return { ok: `Created ${fullName}. They sign in with cafe code ${admin.business.code}, username "${username}" and the PIN you set.` };
 }
 
 export async function updateWorker(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const userId = String(formData.get("user_id") ?? "");
   const fullName = String(formData.get("full_name") ?? "").trim();
   const locationId = String(formData.get("location_id") ?? "") || null;
@@ -106,7 +112,10 @@ export async function updateWorker(_prev: ActionResult, formData: FormData): Pro
   if (error) return { error: error.message };
 
   // Also block sign-in / token refresh at the auth layer for deactivated users.
+  // (admin_update_profile above already refused users of another business.)
   const service = createAdminClient();
+  const { data: target } = await service.from("profiles").select("business_id").eq("id", userId).maybeSingle();
+  if (target?.business_id !== admin.profile.business_id) return { error: "User not found." };
   const { error: banError } = await service.auth.admin.updateUserById(userId, {
     ban_duration: isActive ? "none" : BANNED_FOREVER,
   });
@@ -124,8 +133,9 @@ export async function resetPin(_prev: ActionResult, formData: FormData): Promise
   if (!PIN_PATTERN.test(pin)) return { error: "PIN must be exactly 6 digits." };
 
   const service = createAdminClient();
-  const { data: target } = await service.from("profiles").select("role").eq("id", userId).maybeSingle();
-  if (!target) return { error: "User not found." };
+  const { data: target } = await service.from("profiles").select("role, business_id").eq("id", userId).maybeSingle();
+  // The service role bypasses row security, so the business check must be explicit here.
+  if (!target || target.business_id !== admin.profile.business_id) return { error: "User not found." };
   if (target.role !== "worker") return { error: "Admin passwords are changed from the Supabase dashboard." };
 
   const { error } = await service.auth.admin.updateUserById(userId, { password: pin });

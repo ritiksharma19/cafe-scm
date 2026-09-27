@@ -57,8 +57,39 @@ export async function createTestDb(): Promise<Db> {
   return db;
 }
 
-export async function locationId(db: Db, code: string): Promise<string> {
-  const r = await db.query<{ id: string }>("select id from public.locations where code = $1", [code]);
+/** The business created from the original data (every test runs in it unless told otherwise). */
+export async function firstBusinessId(db: Db): Promise<string> {
+  const r = await db.query<{ id: string }>("select id from public.businesses order by created_at, code limit 1");
+  return r.rows[0].id;
+}
+
+async function businessId(db: Db, code?: string): Promise<string> {
+  if (!code) return firstBusinessId(db);
+  const r = await db.query<{ id: string }>("select id from public.businesses where code = $1", [code]);
+  if (!r.rows[0]) throw new Error(`No business ${code}`);
+  return r.rows[0].id;
+}
+
+/**
+ * A second (third …) business with settings, Central Storage and carts, created the
+ * way the platform does it. Returns its id.
+ */
+export async function createBusiness(db: Db, code: string, carts = 2): Promise<string> {
+  const r = await db.query<{ id: string }>("insert into public.businesses (code, name) values ($1, $2) returning id", [code, `${code} Cafe`]);
+  const id = r.rows[0].id;
+  await db.query("insert into public.business_settings (business_id, business_name) values ($1, $2)", [id, `${code} Cafe`]);
+  await db.query("insert into public.locations (business_id, code, name, type, sort_order) values ($1, 'CENTRAL', 'Central Storage', 'central', 0)", [id]);
+  for (let i = 1; i <= carts; i++) {
+    await db.query("insert into public.locations (business_id, code, name, type, sort_order) values ($1, $2, $3, 'cart', $4)", [id, `CART${i}`, `Cart ${i}`, i]);
+  }
+  return id;
+}
+
+export async function locationId(db: Db, code: string, businessCode?: string): Promise<string> {
+  const r = await db.query<{ id: string }>("select id from public.locations where code = $1 and business_id = $2", [
+    code,
+    await businessId(db, businessCode),
+  ]);
   if (!r.rows[0]) throw new Error(`No location ${code}`);
   return r.rows[0].id;
 }
@@ -70,22 +101,23 @@ export async function locationId(db: Db, code: string): Promise<string> {
  */
 export async function createUser(
   db: Db,
-  opts: { username: string; role: "admin" | "worker"; locationCode?: string; fullName?: string },
+  opts: { username: string; role: "admin" | "worker"; locationCode?: string; fullName?: string; business?: string },
 ): Promise<string> {
   const id = randomUUID();
   await db.query("insert into auth.users (id, email, raw_app_meta_data) values ($1, $2, $3)", [
     id,
-    `${opts.username}@test.local`,
+    `${opts.username}.${opts.business ?? "main"}@test.local`,
     JSON.stringify({ provider: "email", providers: ["email"] }),
   ]);
   await db.query(
-    "insert into public.profiles (id, username, full_name, role, location_id) values ($1, $2, $3, $4, $5)",
+    "insert into public.profiles (id, username, full_name, role, location_id, business_id) values ($1, $2, $3, $4, $5, $6)",
     [
       id,
       opts.username,
       opts.fullName ?? opts.username,
       opts.role,
-      opts.locationCode ? await locationId(db, opts.locationCode) : null,
+      opts.locationCode ? await locationId(db, opts.locationCode, opts.business) : null,
+      await businessId(db, opts.business),
     ],
   );
   return id;

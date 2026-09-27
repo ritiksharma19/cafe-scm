@@ -18,7 +18,8 @@ export default async function MorePage() {
       </section>
       <section className="card divide-y divide-line">
         {[
-          ["/worker/activity", "Today's activity"],
+          ["/worker/activity", "Today's activity & cash"],
+          ["/worker/expense", "Record an expense"],
           ["/worker/sync", "Waiting to sync"],
           ["/worker/requests", "Request stock"],
           ["/worker/send", "Send stock to another location"],

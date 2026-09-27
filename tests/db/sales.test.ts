@@ -162,7 +162,7 @@ describe("negative stock", () => {
 
   it("blocks the whole sale when the owner turns negative sales off", async () => {
     await asOwner(db, async (tx) => {
-      await tx.query("update public.app_settings set allow_negative_on_sale = false");
+      await tx.query("update public.business_settings set allow_negative_on_sale = false");
       await tx.query("select set_config('request.jwt.claims', $1, true)", [JSON.stringify({ sub: worker1 })]);
       await tx.exec("set local role authenticated");
       await tx.exec("savepoint s");

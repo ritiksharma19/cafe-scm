@@ -19,6 +19,18 @@ export interface Profile {
   full_name: string;
   role: UserRole;
   location_id: string | null;
+  business_id: string;
   is_active: boolean;
   created_at: string;
+}
+
+/** The signed-in user's business (from current_business()). */
+export interface Business {
+  id: string;
+  code: string;
+  name: string;
+  status: "active" | "suspended";
+  plan: string;
+  cart_limit: number | null;
+  is_platform_admin: boolean;
 }

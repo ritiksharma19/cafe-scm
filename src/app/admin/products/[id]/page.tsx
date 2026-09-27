@@ -17,8 +17,9 @@ interface Version {
   recipe_items: (RecipeLine & { material: { name: string; base_unit: string } | null })[];
 }
 
-export default async function ProductRecipePage({ params }: PageProps<"/admin/products/[id]">) {
+export default async function ProductRecipePage({ params, searchParams }: PageProps<"/admin/products/[id]">) {
   const { id } = await params;
+  const justCreatedSize = (await searchParams).size === "1";
   const supabase = await createClient();
   const [{ data: product }, { data: versions }, catalog] = await Promise.all([
     supabase.from("products").select("id, name").eq("id", id).maybeSingle<{ id: string; name: string }>(),
@@ -42,6 +43,11 @@ export default async function ProductRecipePage({ params }: PageProps<"/admin/pr
         </Link>
         <h1 className="text-2xl font-bold">{product.name} — recipe</h1>
         <p className="text-sm text-muted">{current ? `Current: version ${current.version}` : "No recipe yet — this product cannot be sold until it has one."}</p>
+        {justCreatedSize && (
+          <p className="mt-2 rounded-lg bg-ok/10 px-3 py-2 text-sm font-medium text-ok">
+            Size added with a copy of the main recipe. Adjust the quantities for this size below (e.g. more milk for Large).
+          </p>
+        )}
       </div>
 
       <section className="card p-5">

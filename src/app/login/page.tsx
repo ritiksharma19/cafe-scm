@@ -6,7 +6,7 @@ export const metadata = { title: "Sign in" };
 
 export default async function LoginPage() {
   const user = await getCurrentUser();
-  if (user) redirect(homePathFor(user.profile.role));
+  if (user) redirect(user.business.status === "active" ? homePathFor(user.profile.role) : "/suspended");
 
   return (
     <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-8 px-4 py-10">
@@ -15,7 +15,7 @@ export default async function LoginPage() {
           SCM
         </div>
         <h1 className="text-2xl font-bold">Cafe SCM</h1>
-        <p className="mt-1 text-muted">Sign in with your username and PIN</p>
+        <p className="mt-1 text-muted">Sign in with your cafe code, username and PIN</p>
       </div>
       <LoginForm />
     </main>

@@ -2,8 +2,9 @@ import Link from "next/link";
 import { LiveRefresh } from "@/components/LiveRefresh";
 import { RangeFilter } from "@/components/RangeFilter";
 import { StatusPill } from "@/components/StatusPill";
-import { getDashboardSummary, getStockStatus, pctChange, type StockStatusRow } from "@/lib/analytics";
+import { getDashboardSummary, getProfitSummary, getStockStatus, pctChange, type StockStatusRow } from "@/lib/analytics";
 import { formatDateTime, formatINR } from "@/lib/format";
+import { formatPct } from "@/lib/money";
 import { formatQuantity, type UnitInfo } from "@/lib/quantity";
 import { resolveRange } from "@/lib/range";
 import { createClient } from "@/lib/supabase/server";
@@ -15,14 +16,17 @@ export default async function AdminDashboard({ searchParams }: PageProps<"/admin
   const range = resolveRange(await searchParams);
   const supabase = await createClient();
 
-  const [{ data: locations }, { data: profiles }, { data: units }, { count: productCount }, summary, overall] = await Promise.all([
+  const [{ data: locations }, { data: profiles }, { data: units }, { count: productCount }, summary, overall, profit] = await Promise.all([
     supabase.from("locations").select("id, code, name, type, sort_order, is_active").eq("is_active", true).order("sort_order").returns<Location[]>(),
     supabase.from("profiles").select("id, role, location_id, is_active").returns<Pick<Profile, "id" | "role" | "location_id" | "is_active">[]>(),
     supabase.from("units").select("code, factor_to_base").returns<UnitInfo[]>(),
     supabase.from("products").select("id", { count: "exact", head: true }),
     getDashboardSummary(range.from, range.to),
     getStockStatus(null),
+    getProfitSummary(range.from, range.to, null),
   ]);
+  const cartProfit = new Map(profit.by_location.map((l) => [l.location_id, l]));
+  const money = (v: number) => `${v < 0 ? "−" : ""}${formatINR(Math.abs(v).toFixed(0))}`;
   const carts = (locations ?? []).filter((l) => l.type === "cart");
   const perCart = await Promise.all(carts.map((c) => getStockStatus(c.id)));
   const cartStatus = new Map(carts.map((c, i) => [c.id, perCart[i]]));
@@ -61,11 +65,27 @@ export default async function AdminDashboard({ searchParams }: PageProps<"/admin
 
   const cur = summary.current;
   const prev = summary.previous;
-  const kpis: { label: string; value: string; delta: string | null; href?: string }[] = [
-    { label: "Orders", value: String(cur.orders), delta: pctChange(cur.orders, prev.orders), href: "/admin/orders" },
-    { label: "Items sold", value: String(cur.items), delta: pctChange(cur.items, prev.items) },
+  const pc = profit.current;
+  const pp = profit.previous;
+  const kpis: { label: string; value: string; delta: string | null; href?: string; sub?: string; tone?: "danger" }[] = [
+    { label: "Orders", value: String(cur.orders), delta: pctChange(cur.orders, prev.orders), href: "/admin/orders", sub: `${cur.items} items` },
     { label: "Sales", value: formatINR(cur.sales), delta: pctChange(cur.sales, prev.sales) },
-    { label: "Ingredients used (cost)", value: formatINR(cur.consumption_cost), delta: pctChange(cur.consumption_cost, prev.consumption_cost), href: "/admin/analytics" },
+    {
+      label: "Gross profit",
+      value: money(pc.gross_profit),
+      sub: `${formatPct(pc.gross_margin_pct)} margin`,
+      delta: pctChange(pc.gross_profit, pp.gross_profit),
+      href: "/admin/analytics",
+      tone: pc.gross_profit < 0 ? "danger" : undefined,
+    },
+    {
+      label: "Net profit",
+      value: money(pc.net_profit),
+      sub: `${formatPct(pc.net_margin_pct)} after wastage & expenses`,
+      delta: pp.net_profit > 0 ? pctChange(pc.net_profit, pp.net_profit) : null,
+      href: "/admin/analytics",
+      tone: pc.net_profit < 0 ? "danger" : undefined,
+    },
     { label: "Purchases", value: formatINR(cur.purchases), delta: pctChange(cur.purchases, prev.purchases), href: "/admin/purchases" },
     { label: "Wastage", value: formatINR(cur.wastage_cost), delta: pctChange(cur.wastage_cost, prev.wastage_cost), href: "/admin/wastage" },
   ];
@@ -87,7 +107,7 @@ export default async function AdminDashboard({ searchParams }: PageProps<"/admin
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Dashboard</h1>
-        <LiveRefresh tables={["stock_levels", "orders", "stock_requests", "stock_transfers", "stock_counts", "wastage", "purchase_receipts"]} />
+        <LiveRefresh tables={["stock_levels", "orders", "stock_requests", "stock_transfers", "stock_counts", "wastage", "purchase_receipts", "expenses"]} />
       </div>
 
       {!setupDone && (
@@ -141,7 +161,8 @@ export default async function AdminDashboard({ searchParams }: PageProps<"/admin
             const body = (
               <>
                 <p className="text-xs font-semibold uppercase text-muted">{k.label}</p>
-                <p className="text-2xl font-bold tabular-nums">{k.value}</p>
+                <p className={`text-2xl font-bold tabular-nums ${k.tone === "danger" ? "text-danger" : ""}`}>{k.value}</p>
+                {k.sub && <p className="text-xs font-medium text-muted">{k.sub}</p>}
                 <p className="text-xs text-muted">{k.delta ? `${k.delta} vs ${prevLabel}` : `— vs ${prevLabel}`}</p>
               </>
             );
@@ -225,6 +246,19 @@ export default async function AdminDashboard({ searchParams }: PageProps<"/admin
                     <dt className="text-xs text-muted">Orders · items</dt>
                     <dd className="font-bold tabular-nums">
                       {c.orders} · {c.items}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">Gross profit</dt>
+                    <dd className="font-bold tabular-nums">
+                      {money(cartProfit.get(c.location_id)?.gross_profit ?? 0)}{" "}
+                      <span className="text-xs font-normal text-muted">{formatPct(cartProfit.get(c.location_id)?.gross_margin_pct)}</span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-muted">Net profit</dt>
+                    <dd className={`font-bold tabular-nums ${(cartProfit.get(c.location_id)?.net_profit ?? 0) < 0 ? "text-danger" : ""}`}>
+                      {money(cartProfit.get(c.location_id)?.net_profit ?? 0)}
                     </dd>
                   </div>
                   <div>

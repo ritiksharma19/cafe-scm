@@ -4,11 +4,14 @@ import { ColumnChart } from "@/components/charts/ColumnChart";
 import { RangeFilter } from "@/components/RangeFilter";
 import { StatusPill } from "@/components/StatusPill";
 import {
+  getAddonSales,
   getDailyTrend,
   getHourlyOrders,
   getMaterialFlow,
   getProductCosts,
+  getProductProfit,
   getProductSales,
+  getProfitSummary,
   getPurchasesByMaterial,
   getPurchasesBySupplier,
   getStockStatus,
@@ -18,6 +21,7 @@ import { formatQuantity, type UnitInfo } from "@/lib/quantity";
 import { resolveRange } from "@/lib/range";
 import { createClient } from "@/lib/supabase/server";
 import type { Location } from "@/lib/types";
+import { ProductProfitTable, ProfitOverview } from "./ProfitOverview";
 
 export const metadata = { title: "Analytics" };
 
@@ -49,7 +53,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps<"/admin/
   const locationId = typeof params.location === "string" && (locations ?? []).some((l) => l.id === params.location) ? params.location : null;
   const compareAt = new Date(range.to.getTime() - 30 * DAY);
 
-  const [daily, hourly, products, flow, status, byMaterial, bySupplier, costs] = await Promise.all([
+  const [daily, hourly, products, flow, status, byMaterial, bySupplier, costs, profit, productProfit, addonSales] = await Promise.all([
     getDailyTrend(range.from, range.to, locationId),
     getHourlyOrders(range.from, range.to, locationId),
     getProductSales(range.from, range.to, locationId),
@@ -58,6 +62,9 @@ export default async function AnalyticsPage({ searchParams }: PageProps<"/admin/
     getPurchasesByMaterial(range.from, range.to),
     getPurchasesBySupplier(range.from, range.to),
     getProductCosts(compareAt),
+    getProfitSummary(range.from, range.to, locationId),
+    getProductProfit(range.from, range.to, locationId),
+    getAddonSales(range.from, range.to, locationId),
   ]);
 
   const unitByCode = new Map((units ?? []).map((u) => [u.code, u]));
@@ -97,6 +104,8 @@ export default async function AnalyticsPage({ searchParams }: PageProps<"/admin/
         </p>
       </div>
       <RangeFilter path="/admin/analytics" range={range} locations={locations ?? []} locationId={locationId ?? undefined} />
+
+      <ProfitOverview profit={profit} days={range.days} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {[
@@ -146,6 +155,51 @@ export default async function AnalyticsPage({ searchParams }: PageProps<"/admin/
           />
         </Section>
       </div>
+
+      <Section
+        title="Profit by product"
+        note={
+          <>
+            Sales at menu price minus the ingredient cost of those exact orders. Order discounts are not split per product (they are in
+            the P&amp;L above). Margins under 50% are highlighted — most cafes aim for 65–75% on food.
+          </>
+        }
+      >
+        <ProductProfitTable rows={productProfit} />
+      </Section>
+
+      {addonSales.length > 0 && (
+        <Section title="Add-ons" note="How often each add-on was chosen, what it earned, and what its ingredients cost. Already included in product profit above.">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-line text-left text-xs uppercase text-muted">
+                <th className="py-2 pr-3 font-semibold">Add-on</th>
+                <th className="py-2 pr-3 text-right font-semibold">Times</th>
+                <th className="py-2 pr-3 text-right font-semibold">Sales</th>
+                <th className="py-2 pr-3 text-right font-semibold">Ingredient cost</th>
+                <th className="py-2 text-right font-semibold">Profit</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {addonSales.map((a) => {
+                const profit = Number(a.sales) - Number(a.cogs);
+                return (
+                  <tr key={a.addon_id}>
+                    <td className="py-2 pr-3 font-medium">{a.name}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{a.quantity}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{formatINR(Number(a.sales).toFixed(0))}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{formatINR(Number(a.cogs).toFixed(0))}</td>
+                    <td className="py-2 text-right font-semibold tabular-nums">
+                      {formatINR(profit.toFixed(0))}
+                      {Number(a.sales) > 0 && <span className="ml-1 text-xs font-normal text-muted">{Math.round((profit / Number(a.sales)) * 100)}%</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </Section>
+      )}
 
       <Section
         title="Raw material use vs sales"
@@ -309,7 +363,7 @@ export default async function AnalyticsPage({ searchParams }: PageProps<"/admin/
         note={
           <>
             Estimated ingredient cost from the current recipe and weighted-average costs, compared with 30 days earlier (
-            {compareAt.toISOString().slice(0, 10)}). Margin is <b>estimated gross margin before other expenses</b> — not profit.
+            {compareAt.toISOString().slice(0, 10)}). Margin is <b>estimated gross margin before other expenses</b> at today&apos;s costs; actual profit is in the P&amp;L above.
           </>
         }
       >
