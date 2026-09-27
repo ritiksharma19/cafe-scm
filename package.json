@@ -17,7 +17,8 @@
     "db:push": "supabase db push",
     "db:types": "supabase gen types typescript --linked --schema public > src/lib/database.types.ts",
     "seed:sample": "node --env-file=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/seed-sample.mjs",
-    "check:concurrency": "node --env-file=.env.local scripts/check-concurrency.mjs"
+    "check:concurrency": "node --env-file=.env.local scripts/check-concurrency.mjs",
+    "seed:demo": "node --env-file=.env.local scripts/seed-demo-chai.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
