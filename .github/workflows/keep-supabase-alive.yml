@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Query the database
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
           # Tolerate stray spaces, newlines or quotes pasted into the secrets.
