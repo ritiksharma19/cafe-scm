@@ -17,6 +17,17 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
         run: |
+          # Tolerate stray spaces, newlines or quotes pasted into the secrets.
+          SUPABASE_URL=$(printf '%s' "$SUPABASE_URL" | tr -d '[:space:]"'\' | sed 's:/*$::')
+          SUPABASE_SECRET_KEY=$(printf '%s' "$SUPABASE_SECRET_KEY" | tr -d '[:space:]"'\')
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SECRET_KEY" ]; then
+            echo "::error::Secret SUPABASE_URL or SUPABASE_SECRET_KEY is missing. Add both under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          case "$SUPABASE_URL" in
+            https://*.supabase.co) ;;
+            *) echo "::error::SUPABASE_URL must look like https://<project-ref>.supabase.co (value only, no variable name)."; exit 1 ;;
+          esac
           curl --fail --silent --show-error \
             "$SUPABASE_URL/rest/v1/units?select=code&limit=1" \
             -H "apikey: $SUPABASE_SECRET_KEY"
